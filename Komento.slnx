@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Komento.AspNetCore/Komento.AspNetCore.csproj" />
+    <Project Path="src/Komento/Komento.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Komento.Benchmarks/Komento.Benchmarks.csproj" />
+    <Project Path="tests/Komento.Tests/Komento.Tests.csproj" />
+  </Folder>
+</Solution>
