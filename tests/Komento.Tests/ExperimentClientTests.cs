@@ -193,4 +193,295 @@ public class ExperimentClientTests
         var result = await client.GetVariantAsync("exp-1", "user-1", EvaluationContext.Empty);
         result.Should().Be(VariantResult.NotFound);
     }
+
+    // ── Typed helpers ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetBoolAsync_returns_typed_value_from_variant()
+    {
+        var config = new ExperimentConfig
+        {
+            Id          = "bool-flag",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "on", Allocation = 1.0, Value = true }]
+        };
+        var client = BuildClient(config);
+        var result = await client.GetBoolAsync("bool-flag", "user-1", EvaluationContext.Empty);
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetBoolAsync_returns_default_when_ineligible()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "bool-filtered",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "on", Allocation = 1.0, Value = true }],
+            GlobalFilters = [new TraitEqualsFilter { Key = "x", Value = "y" }]
+        };
+        var client = BuildClient(config);
+        (await client.GetBoolAsync("bool-filtered", "user-1", EvaluationContext.Empty, defaultValue: false)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetBoolAsync_returns_default_when_value_is_wrong_type()
+    {
+        var config = new ExperimentConfig
+        {
+            Id          = "bool-wrong-type",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "on", Allocation = 1.0, Value = "not-a-bool" }]
+        };
+        var client = BuildClient(config);
+        (await client.GetBoolAsync("bool-wrong-type", "user-1", EvaluationContext.Empty, defaultValue: true)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetStringAsync_returns_typed_value_from_variant()
+    {
+        var config = new ExperimentConfig
+        {
+            Id          = "str-flag",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = "hello" }]
+        };
+        var client = BuildClient(config);
+        (await client.GetStringAsync("str-flag", "user-1", EvaluationContext.Empty)).Should().Be("hello");
+    }
+
+    [Fact]
+    public async Task GetStringAsync_returns_default_when_ineligible()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "str-filtered",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = "hello" }],
+            GlobalFilters = [new TraitEqualsFilter { Key = "x", Value = "y" }]
+        };
+        var client = BuildClient(config);
+        (await client.GetStringAsync("str-filtered", "user-1", EvaluationContext.Empty, defaultValue: "fallback")).Should().Be("fallback");
+    }
+
+    [Fact]
+    public async Task GetStringAsync_returns_default_when_value_is_wrong_type()
+    {
+        var config = new ExperimentConfig
+        {
+            Id          = "str-wrong-type",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = 42 }]
+        };
+        var client = BuildClient(config);
+        (await client.GetStringAsync("str-wrong-type", "user-1", EvaluationContext.Empty, defaultValue: "fallback")).Should().Be("fallback");
+    }
+
+    [Fact]
+    public async Task GetIntAsync_returns_typed_value_from_variant()
+    {
+        var config = new ExperimentConfig
+        {
+            Id          = "int-flag",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = 42 }]
+        };
+        var client = BuildClient(config);
+        (await client.GetIntAsync("int-flag", "user-1", EvaluationContext.Empty)).Should().Be(42);
+    }
+
+    [Fact]
+    public async Task GetIntAsync_returns_default_when_ineligible()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "int-filtered",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = 42 }],
+            GlobalFilters = [new TraitEqualsFilter { Key = "x", Value = "y" }]
+        };
+        var client = BuildClient(config);
+        (await client.GetIntAsync("int-filtered", "user-1", EvaluationContext.Empty, defaultValue: -1)).Should().Be(-1);
+    }
+
+    [Fact]
+    public async Task GetDoubleAsync_returns_typed_value_from_variant()
+    {
+        var config = new ExperimentConfig
+        {
+            Id          = "dbl-flag",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = 3.14 }]
+        };
+        var client = BuildClient(config);
+        (await client.GetDoubleAsync("dbl-flag", "user-1", EvaluationContext.Empty)).Should().Be(3.14);
+    }
+
+    [Fact]
+    public async Task GetDoubleAsync_returns_default_when_ineligible()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "dbl-filtered",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = 3.14 }],
+            GlobalFilters = [new TraitEqualsFilter { Key = "x", Value = "y" }]
+        };
+        var client = BuildClient(config);
+        (await client.GetDoubleAsync("dbl-filtered", "user-1", EvaluationContext.Empty, defaultValue: -1.0)).Should().Be(-1.0);
+    }
+
+    // ── Async slow path (typed helpers) ───────────────────────────────────────
+
+    // A segment provider that yields to force a truly async ValueTask.
+    private sealed class YieldingSegmentProvider(bool isMember) : ISegmentProvider
+    {
+        public async ValueTask<bool> IsInSegmentAsync(string subjectId, string segmentName, CancellationToken ct)
+        {
+            await Task.Yield();
+            return isMember;
+        }
+    }
+
+    [Fact]
+    public async Task GetBoolAsync_async_path_returns_value()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "async-bool",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "on", Allocation = 1.0, Value = true }],
+            GlobalFilters = [new SegmentIncludeFilter { Segment = "seg" }]
+        };
+        var client = BuildClient(config, new YieldingSegmentProvider(isMember: true));
+        (await client.GetBoolAsync("async-bool", "user-1", EvaluationContext.Empty)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetBoolAsync_async_path_returns_default_when_ineligible()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "async-bool-out",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "on", Allocation = 1.0, Value = true }],
+            GlobalFilters = [new SegmentIncludeFilter { Segment = "seg" }]
+        };
+        var client = BuildClient(config, new YieldingSegmentProvider(isMember: false));
+        (await client.GetBoolAsync("async-bool-out", "user-1", EvaluationContext.Empty, defaultValue: false)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetStringAsync_async_path_returns_value()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "async-str",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = "hello" }],
+            GlobalFilters = [new SegmentIncludeFilter { Segment = "seg" }]
+        };
+        var client = BuildClient(config, new YieldingSegmentProvider(isMember: true));
+        (await client.GetStringAsync("async-str", "user-1", EvaluationContext.Empty)).Should().Be("hello");
+    }
+
+    [Fact]
+    public async Task GetIntAsync_async_path_returns_value()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "async-int",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = 7 }],
+            GlobalFilters = [new SegmentIncludeFilter { Segment = "seg" }]
+        };
+        var client = BuildClient(config, new YieldingSegmentProvider(isMember: true));
+        (await client.GetIntAsync("async-int", "user-1", EvaluationContext.Empty)).Should().Be(7);
+    }
+
+    [Fact]
+    public async Task GetDoubleAsync_async_path_returns_value()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "async-dbl",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "v1", Allocation = 1.0, Value = 2.71 }],
+            GlobalFilters = [new SegmentIncludeFilter { Segment = "seg" }]
+        };
+        var client = BuildClient(config, new YieldingSegmentProvider(isMember: true));
+        (await client.GetDoubleAsync("async-dbl", "user-1", EvaluationContext.Empty)).Should().Be(2.71);
+    }
+
+    // ── Edge cases ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SegmentIncludeFilter_with_no_segment_provider_returns_ineligible()
+    {
+        var config = new ExperimentConfig
+        {
+            Id            = "seg-no-provider",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "treatment", Allocation = 1.0 }],
+            GlobalFilters = [new SegmentIncludeFilter { Segment = "beta" }]
+        };
+        // No segment provider registered — client built without one.
+        var options = new KomentoOptions { Experiments = new HashSet<string> { config.Id } };
+        var client  = new ExperimentClient(options, segmentProvider: null);
+        await client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [config.Id] = config });
+
+        var result = await client.GetVariantAsync(config.Id, "user-1", EvaluationContext.Empty);
+        result.Should().Be(VariantResult.Ineligible);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_batch_silently_ignores_non_relevant_experiment_ids()
+    {
+        var client = BuildClient();
+        // "other-exp" is not in the relevant set — should be silently dropped.
+        var irrelevant = new ExperimentConfig
+        {
+            Id          = "other-exp",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "x", Allocation = 1.0 }]
+        };
+        await client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [irrelevant.Id] = irrelevant });
+
+        var result = await client.GetVariantAsync("other-exp", "user-1", EvaluationContext.Empty);
+        result.Should().Be(VariantResult.NotFound);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_single_silently_ignores_non_relevant_experiment_id()
+    {
+        var client = BuildClient();
+        var irrelevant = new ExperimentConfig
+        {
+            Id          = "other-exp",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "x", Allocation = 1.0 }]
+        };
+        await client.UpdateAsync(irrelevant);
+
+        var result = await client.GetVariantAsync("other-exp", "user-1", EvaluationContext.Empty);
+        result.Should().Be(VariantResult.NotFound);
+    }
+
+    [Fact]
+    public async Task SubjectOverride_forces_variant_in_async_evaluation_path()
+    {
+        // Experiment has both a SegmentIncludeFilter (forces async path) and a SubjectOverride.
+        // The override should short-circuit before the segment check.
+        var config = new ExperimentConfig
+        {
+            Id            = "async-override",
+            SubjectType   = "user",
+            Variants      = [new VariantConfig { Name = "control", Allocation = 1.0 }],
+            GlobalFilters = [new SegmentIncludeFilter { Segment = "seg" }],
+            Overrides     = [new SubjectOverride { SubjectId = "vip", Variant = "treatment" }]
+        };
+        var client = BuildClient(config, new YieldingSegmentProvider(isMember: false));
+        var result = await client.GetVariantAsync("async-override", "vip", EvaluationContext.Empty);
+        (result == "treatment").Should().BeTrue();
+    }
 }

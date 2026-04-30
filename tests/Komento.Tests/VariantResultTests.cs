@@ -48,4 +48,44 @@ public class VariantResultTests
         // By design: both result in control behavior; callers do not need to distinguish them.
         VariantResult.NotFound.Should().Be(VariantResult.Ineligible);
     }
+
+    [Fact]
+    public void Equals_returns_true_for_structurally_identical_results()
+    {
+        var a = new VariantResult { VariantName = "treatment", IsEligible = true, IsOutsider = false };
+        var b = new VariantResult { VariantName = "treatment", IsEligible = true, IsOutsider = false };
+        a.Equals(b).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Equals_returns_false_for_different_variant_name()
+    {
+        var a = new VariantResult { VariantName = "treatment", IsEligible = true };
+        var b = new VariantResult { VariantName = "control",   IsEligible = true };
+        a.Equals(b).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Equals_object_returns_false_for_non_VariantResult_type()
+    {
+        var r = new VariantResult { VariantName = "treatment", IsEligible = true };
+        r.Equals("treatment").Should().BeFalse();
+        r.Equals(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetHashCode_is_equal_for_structurally_identical_results()
+    {
+        var a = new VariantResult { VariantName = "treatment", IsEligible = true, IsOutsider = false };
+        var b = new VariantResult { VariantName = "treatment", IsEligible = true, IsOutsider = false };
+        a.GetHashCode().Should().Be(b.GetHashCode());
+    }
+
+    [Fact]
+    public void GetHashCode_differs_for_different_results()
+    {
+        var a = new VariantResult { VariantName = "treatment", IsEligible = true };
+        var b = new VariantResult { VariantName = "control",   IsEligible = true };
+        a.GetHashCode().Should().NotBe(b.GetHashCode());
+    }
 }

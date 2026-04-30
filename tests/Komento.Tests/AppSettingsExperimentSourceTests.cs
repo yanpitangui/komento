@@ -122,4 +122,107 @@ public class AppSettingsExperimentSourceTests
         var result = await source.LoadAsync(new HashSet<string> { "feature-x" });
         result.Should().ContainSingle();
     }
+
+    // ── Value coercion ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CoerceValue_parses_integer_string()
+    {
+        var json = """
+        {
+          "Komento": {
+            "Experiments": [{
+              "Id": "int-exp",
+              "SubjectType": "user",
+              "Variants": [ { "Name": "v1", "Allocation": 1.0, "Value": "42" } ]
+            }]
+          }
+        }
+        """;
+        var source = new AppSettingsExperimentSource(BuildConfig(json));
+        var result = await source.LoadAsync(new HashSet<string> { "int-exp" });
+        result["int-exp"].Variants[0].Value.Should().Be(42);
+    }
+
+    [Fact]
+    public async Task CoerceValue_parses_double_string()
+    {
+        var json = """
+        {
+          "Komento": {
+            "Experiments": [{
+              "Id": "dbl-exp",
+              "SubjectType": "user",
+              "Variants": [ { "Name": "v1", "Allocation": 1.0, "Value": "3.14" } ]
+            }]
+          }
+        }
+        """;
+        var source = new AppSettingsExperimentSource(BuildConfig(json));
+        var result = await source.LoadAsync(new HashSet<string> { "dbl-exp" });
+        result["dbl-exp"].Variants[0].Value.Should().Be(3.14);
+    }
+
+    [Fact]
+    public async Task CoerceValue_keeps_unrecognised_string_as_string()
+    {
+        var json = """
+        {
+          "Komento": {
+            "Experiments": [{
+              "Id": "str-exp",
+              "SubjectType": "user",
+              "Variants": [ { "Name": "v1", "Allocation": 1.0, "Value": "red" } ]
+            }]
+          }
+        }
+        """;
+        var source = new AppSettingsExperimentSource(BuildConfig(json));
+        var result = await source.LoadAsync(new HashSet<string> { "str-exp" });
+        result["str-exp"].Variants[0].Value.Should().Be("red");
+    }
+
+    // ── Error paths ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Unknown_filter_type_throws_InvalidOperationException()
+    {
+        var json = """
+        {
+          "Komento": {
+            "Experiments": [{
+              "Id": "bad-filter",
+              "SubjectType": "user",
+              "Variants": [ { "Name": "v1", "Allocation": 1.0 } ],
+              "GlobalFilters": [ { "Type": "unknown-filter" } ]
+            }]
+          }
+        }
+        """;
+        var source = new AppSettingsExperimentSource(BuildConfig(json));
+        var act = () => source.LoadAsync(new HashSet<string> { "bad-filter" }).AsTask();
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*unknown-filter*");
+    }
+
+    [Fact]
+    public async Task Unknown_override_type_throws_InvalidOperationException()
+    {
+        var json = """
+        {
+          "Komento": {
+            "Experiments": [{
+              "Id": "bad-override",
+              "SubjectType": "user",
+              "Variants": [ { "Name": "v1", "Allocation": 1.0 } ],
+              "Overrides": [ { "Type": "unknown-override" } ]
+            }]
+          }
+        }
+        """;
+        var source = new AppSettingsExperimentSource(BuildConfig(json));
+        var act = () => source.LoadAsync(new HashSet<string> { "bad-override" }).AsTask();
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*unknown-override*");
+    }
 }
