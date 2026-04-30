@@ -2,7 +2,7 @@ namespace Komento;
 
 public sealed class KomentoOptions
 {
-    public IReadOnlySet<string> Experiments            { get; init; } = new HashSet<string>();
-    public EvaluationContext    StaticContext           { get; init; } = EvaluationContext.Empty;
-    public int                  ExposureChannelCapacity { get; init; } = 4096;
+    public IReadOnlySet<string> Experiments            { get; set; } = new HashSet<string>();
+    public EvaluationContext    StaticContext           { get; set; } = EvaluationContext.Empty;
+    public int                  ExposureChannelCapacity { get; set; } = 4096;
 }
