@@ -1,6 +1,6 @@
 namespace Komento;
 
-public interface IConfigProvider
+public interface IExperimentSource
 {
     ValueTask<IReadOnlyDictionary<string, ExperimentConfig>> LoadAsync(
         IReadOnlySet<string> experimentIds,

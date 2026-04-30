@@ -19,16 +19,11 @@ public class ExperimentClientTests
 
     private static ExperimentClient BuildClient(
         ExperimentConfig? config          = null,
-        ISegmentProvider? segmentProvider = null,
-        Func<ExposureEvent, ValueTask>? onExposure = null)
+        ISegmentProvider? segmentProvider = null)
     {
-        var cfg = config ?? FiftyFifty();
-        var options = new KomentoOptions
-        {
-            Experiments = new HashSet<string> { cfg.Id },
-            OnExposure  = onExposure
-        };
-        var client = new ExperimentClient(options, segmentProvider);
+        var cfg     = config ?? FiftyFifty();
+        var options = new KomentoOptions { Experiments = new HashSet<string> { cfg.Id } };
+        var client  = new ExperimentClient(options, segmentProvider);
         client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [cfg.Id] = cfg }).AsTask().Wait();
         return client;
     }
@@ -149,16 +144,14 @@ public class ExperimentClientTests
     }
 
     [Fact]
-    public async Task Exposure_event_is_fired_on_every_evaluation()
+    public async Task Exposure_event_is_written_to_channel()
     {
-        ExposureEvent? captured = null;
-        var client = BuildClient(onExposure: e => { captured = e; return ValueTask.CompletedTask; });
-
+        var client = BuildClient();
         await client.GetVariantAsync("exp-1", "user-42", EvaluationContext.Empty);
 
-        Assert.NotNull(captured);
-        Assert.Equal("exp-1",   captured!.Value.FlagKey);
-        Assert.Equal("user-42", captured.Value.SubjectId);
+        Assert.True(client.Exposures.TryRead(out var exposure));
+        Assert.Equal("exp-1",   exposure.FlagKey);
+        Assert.Equal("user-42", exposure.SubjectId);
     }
 
     [Fact]
