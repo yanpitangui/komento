@@ -557,5 +557,5 @@ dotnet test
 dotnet test --filter "FullyQualifiedName~Unknown_experiment_returns_NotFound"
 
 # Benchmarks (Release mode required)
-dotnet run --project tests/Komento.Benchmarks/ -c Release
+dotnet run --project benchmarks/Komento.Benchmarks/ -c Release
 ```
