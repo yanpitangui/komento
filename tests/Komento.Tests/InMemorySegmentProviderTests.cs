@@ -1,0 +1,39 @@
+using Komento;
+using Komento.Internals;
+using Xunit;
+
+namespace Komento.Tests;
+
+public class InMemorySegmentProviderTests
+{
+    private static ISegmentProvider Build(Dictionary<string, IEnumerable<string>> segments)
+        => new InMemorySegmentProvider(segments);
+
+    [Fact]
+    public async Task Known_subject_in_known_segment_returns_true()
+    {
+        var provider = Build(new() { ["vip"] = ["user-1", "user-2"] });
+        Assert.True(await provider.IsInSegmentAsync("user-1", "vip"));
+    }
+
+    [Fact]
+    public async Task Unknown_subject_returns_false()
+    {
+        var provider = Build(new() { ["vip"] = ["user-1"] });
+        Assert.False(await provider.IsInSegmentAsync("user-99", "vip"));
+    }
+
+    [Fact]
+    public async Task Unknown_segment_returns_false()
+    {
+        var provider = Build(new() { ["vip"] = ["user-1"] });
+        Assert.False(await provider.IsInSegmentAsync("user-1", "non-existent-segment"));
+    }
+
+    [Fact]
+    public async Task Empty_segment_always_returns_false()
+    {
+        var provider = Build(new() { ["empty"] = [] });
+        Assert.False(await provider.IsInSegmentAsync("user-1", "empty"));
+    }
+}
