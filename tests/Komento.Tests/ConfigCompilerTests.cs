@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using Komento;
 using Komento.Internals;
 using Xunit;
@@ -20,14 +21,14 @@ public class ConfigCompilerTests
         var config   = MakeConfig(("control", 0.5, null), ("treatment", 0.5, true));
         var compiled = ConfigCompiler.Compile(config);
 
-        Assert.Equal(2, compiled.Variants.Length);
-        Assert.Equal("control",   compiled.Variants[0].Name);
-        Assert.Equal(1,           compiled.Variants[0].Ranges[0].Start);
-        Assert.Equal(500,         compiled.Variants[0].Ranges[0].End);
-        Assert.Equal("treatment", compiled.Variants[1].Name);
-        Assert.Equal(501,         compiled.Variants[1].Ranges[0].Start);
-        Assert.Equal(1000,        compiled.Variants[1].Ranges[0].End);
-        Assert.Equal(true,        compiled.Variants[1].Value);
+        compiled.Variants.Length.Should().Be(2);
+        compiled.Variants[0].Name.Should().Be("control");
+        compiled.Variants[0].Ranges[0].Start.Should().Be(1);
+        compiled.Variants[0].Ranges[0].End.Should().Be(500);
+        compiled.Variants[1].Name.Should().Be("treatment");
+        compiled.Variants[1].Ranges[0].Start.Should().Be(501);
+        compiled.Variants[1].Ranges[0].End.Should().Be(1000);
+        compiled.Variants[1].Value.Should().Be(true);
     }
 
     [Fact]
@@ -36,9 +37,9 @@ public class ConfigCompilerTests
         var config   = MakeConfig(("a", 0.34, null), ("b", 0.33, null), ("c", 0.33, null));
         var compiled = ConfigCompiler.Compile(config);
 
-        Assert.Equal(3, compiled.Variants.Length);
-        Assert.Equal(1, compiled.Variants[0].Ranges[0].Start);
-        Assert.Equal(1000, compiled.Variants[^1].Ranges[^1].End);
+        compiled.Variants.Length.Should().Be(3);
+        compiled.Variants[0].Ranges[0].Start.Should().Be(1);
+        compiled.Variants[^1].Ranges[^1].End.Should().Be(1000);
     }
 
     [Fact]
@@ -47,9 +48,9 @@ public class ConfigCompilerTests
         var config   = MakeConfig(("control", 1.0, null));
         var compiled = ConfigCompiler.Compile(config);
 
-        Assert.Single(compiled.Variants);
-        Assert.Equal(1,    compiled.Variants[0].Ranges[0].Start);
-        Assert.Equal(1000, compiled.Variants[0].Ranges[0].End);
+        compiled.Variants.Should().ContainSingle();
+        compiled.Variants[0].Ranges[0].Start.Should().Be(1);
+        compiled.Variants[0].Ranges[0].End.Should().Be(1000);
     }
 
     [Fact]
@@ -58,9 +59,9 @@ public class ConfigCompilerTests
         var config   = MakeConfig(("control", 0.5, null));
         var compiled = ConfigCompiler.Compile(config);
 
-        Assert.Single(compiled.Variants);
-        Assert.Equal(1,   compiled.Variants[0].Ranges[0].Start);
-        Assert.Equal(500, compiled.Variants[0].Ranges[0].End);
+        compiled.Variants.Should().ContainSingle();
+        compiled.Variants[0].Ranges[0].Start.Should().Be(1);
+        compiled.Variants[0].Ranges[0].End.Should().Be(500);
     }
 
     [Fact]
@@ -76,9 +77,9 @@ public class ConfigCompilerTests
         };
         var compiled = ConfigCompiler.Compile(config);
 
-        Assert.Single(compiled.Filters);
-        Assert.Single(compiled.Overrides);
-        Assert.Equal("exp",  compiled.Id);
-        Assert.Equal("user", compiled.SubjectType);
+        compiled.Filters.Should().ContainSingle();
+        compiled.Overrides.Should().ContainSingle();
+        compiled.Id.Should().Be("exp");
+        compiled.SubjectType.Should().Be("user");
     }
 }

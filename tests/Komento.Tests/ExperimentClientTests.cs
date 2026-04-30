@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using Komento;
 using Komento.Internals;
 using Xunit;
@@ -33,7 +34,7 @@ public class ExperimentClientTests
     {
         var client = BuildClient();
         var result = await client.GetVariantAsync("does-not-exist", "user-1", EvaluationContext.Empty);
-        Assert.Equal(VariantResult.NotFound, result);
+        result.Should().Be(VariantResult.NotFound);
     }
 
     [Fact]
@@ -42,7 +43,7 @@ public class ExperimentClientTests
         var client = BuildClient();
         var r1     = await client.GetVariantAsync("exp-1", "user-42", EvaluationContext.Empty);
         var r2     = await client.GetVariantAsync("exp-1", "user-42", EvaluationContext.Empty);
-        Assert.Equal(r1.VariantName, r2.VariantName);
+        r1.VariantName.Should().Be(r2.VariantName);
     }
 
     [Fact]
@@ -57,7 +58,7 @@ public class ExperimentClientTests
         };
         var client = BuildClient(config);
         var result = await client.GetVariantAsync("exp-override", "vip-user", EvaluationContext.Empty);
-        Assert.True(result == "treatment");
+        (result == "treatment").Should().BeTrue();
     }
 
     [Fact]
@@ -73,7 +74,7 @@ public class ExperimentClientTests
         var client = BuildClient(config);
         var ctx    = EvaluationContext.Create().Set("country", "US").Build();
         var result = await client.GetVariantAsync("exp-filter", "user-1", in ctx);
-        Assert.Equal(VariantResult.Ineligible, result);
+        result.Should().Be(VariantResult.Ineligible);
     }
 
     [Fact]
@@ -89,7 +90,7 @@ public class ExperimentClientTests
         var client = BuildClient(config);
         var ctx    = EvaluationContext.Create().Set("country", "BR").Build();
         var result = await client.GetVariantAsync("exp-filter2", "user-1", in ctx);
-        Assert.True(result.IsEligible);
+        result.IsEligible.Should().BeTrue();
     }
 
     [Fact]
@@ -107,7 +108,7 @@ public class ExperimentClientTests
         };
         var client = BuildClient(config, segmentProvider);
         var result = await client.GetVariantAsync("exp-seg-override", "employee-1", EvaluationContext.Empty);
-        Assert.True(result == "treatment");
+        (result == "treatment").Should().BeTrue();
     }
 
     [Fact]
@@ -125,7 +126,7 @@ public class ExperimentClientTests
         };
         var client = BuildClient(config, segmentProvider);
         var result = await client.GetVariantAsync("exp-seg-filter", "regular-user", EvaluationContext.Empty);
-        Assert.Equal(VariantResult.Ineligible, result);
+        result.Should().Be(VariantResult.Ineligible);
     }
 
     [Fact]
@@ -139,8 +140,8 @@ public class ExperimentClientTests
         };
         var client = BuildClient(config);
         var result = await client.GetVariantAsync("exp-outsider", "user-1", EvaluationContext.Empty);
-        Assert.True(result.IsOutsider);
-        Assert.True(result == "control");
+        result.IsOutsider.Should().BeTrue();
+        (result == "control").Should().BeTrue();
     }
 
     [Fact]
@@ -149,9 +150,9 @@ public class ExperimentClientTests
         var client = BuildClient();
         await client.GetVariantAsync("exp-1", "user-42", EvaluationContext.Empty);
 
-        Assert.True(client.Exposures.TryRead(out var exposure));
-        Assert.Equal("exp-1",   exposure.FlagKey);
-        Assert.Equal("user-42", exposure.SubjectId);
+        client.Exposures.TryRead(out var exposure).Should().BeTrue();
+        exposure.FlagKey.Should().Be("exp-1");
+        exposure.SubjectId.Should().Be("user-42");
     }
 
     [Fact]
@@ -159,14 +160,14 @@ public class ExperimentClientTests
     {
         var client = BuildClient();
         var result = await client.GetBoolAsync("missing", "user-1", EvaluationContext.Empty, defaultValue: true);
-        Assert.True(result);
+        result.Should().BeTrue();
     }
 
     [Fact]
     public async Task RelevantExperimentIds_reflects_loaded_experiments()
     {
         var client = BuildClient();
-        Assert.Contains("exp-1", client.RelevantExperimentIds);
+        client.RelevantExperimentIds.Should().Contain("exp-1");
     }
 
     [Fact]
@@ -181,7 +182,7 @@ public class ExperimentClientTests
         };
         await client.UpdateAsync(newConfig);
         var result = await client.GetVariantAsync("exp-1", "user-1", EvaluationContext.Empty);
-        Assert.True(result == "new-variant");
+        (result == "new-variant").Should().BeTrue();
     }
 
     [Fact]
@@ -190,6 +191,6 @@ public class ExperimentClientTests
         var client = BuildClient();
         await client.RemoveAsync("exp-1");
         var result = await client.GetVariantAsync("exp-1", "user-1", EvaluationContext.Empty);
-        Assert.Equal(VariantResult.NotFound, result);
+        result.Should().Be(VariantResult.NotFound);
     }
 }

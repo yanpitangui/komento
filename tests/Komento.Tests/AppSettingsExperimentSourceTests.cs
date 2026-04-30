@@ -1,4 +1,5 @@
 using System.Text;
+using AwesomeAssertions;
 using Komento;
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -50,9 +51,9 @@ public class AppSettingsExperimentSourceTests
         var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
         var result = await source.LoadAsync(new HashSet<string> { "dark-mode" });
 
-        Assert.Single(result);
-        Assert.True(result.ContainsKey("dark-mode"));
-        Assert.False(result.ContainsKey("checkout-flow"));
+        result.Should().ContainSingle();
+        result.ContainsKey("dark-mode").Should().BeTrue();
+        result.ContainsKey("checkout-flow").Should().BeFalse();
     }
 
     [Fact]
@@ -62,10 +63,10 @@ public class AppSettingsExperimentSourceTests
         var result = await source.LoadAsync(new HashSet<string> { "checkout-flow" });
         var config = result["checkout-flow"];
 
-        Assert.Equal(2,           config.Variants.Count);
-        Assert.Equal("treatment", config.Variants[1].Name);
-        Assert.Equal(0.5,         config.Variants[1].Allocation);
-        Assert.Equal(true,        config.Variants[1].Value);
+        config.Variants.Count.Should().Be(2);
+        config.Variants[1].Name.Should().Be("treatment");
+        config.Variants[1].Allocation.Should().Be(0.5);
+        config.Variants[1].Value.Should().Be(true);
     }
 
     [Fact]
@@ -75,10 +76,10 @@ public class AppSettingsExperimentSourceTests
         var result = await source.LoadAsync(new HashSet<string> { "checkout-flow" });
         var config = result["checkout-flow"];
 
-        Assert.Single(config.GlobalFilters);
-        var filter = Assert.IsType<TraitEqualsFilter>(config.GlobalFilters[0]);
-        Assert.Equal("country", filter.Key);
-        Assert.Equal("BR",      filter.Value);
+        config.GlobalFilters.Should().ContainSingle();
+        var filter = config.GlobalFilters[0].Should().BeOfType<TraitEqualsFilter>().Subject;
+        filter.Key.Should().Be("country");
+        filter.Value.Should().Be("BR");
     }
 
     [Fact]
@@ -88,9 +89,9 @@ public class AppSettingsExperimentSourceTests
         var result = await source.LoadAsync(new HashSet<string> { "checkout-flow" });
         var config = result["checkout-flow"];
 
-        Assert.Equal(2, config.Overrides.Count);
-        Assert.IsType<SubjectOverride>(config.Overrides[0]);
-        Assert.IsType<SegmentOverride>(config.Overrides[1]);
+        config.Overrides.Count.Should().Be(2);
+        config.Overrides[0].Should().BeOfType<SubjectOverride>();
+        config.Overrides[1].Should().BeOfType<SegmentOverride>();
     }
 
     [Fact]
@@ -98,7 +99,7 @@ public class AppSettingsExperimentSourceTests
     {
         var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
         var result = await source.LoadAsync(new HashSet<string> { "non-existent" });
-        Assert.Empty(result);
+        result.Should().BeEmpty();
     }
 
     [Fact]
@@ -119,6 +120,6 @@ public class AppSettingsExperimentSourceTests
         """;
         var source = new AppSettingsExperimentSource(BuildConfig(json), sectionPath: "MyApp");
         var result = await source.LoadAsync(new HashSet<string> { "feature-x" });
-        Assert.Single(result);
+        result.Should().ContainSingle();
     }
 }

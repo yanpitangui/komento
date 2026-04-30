@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using Komento;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -13,7 +14,7 @@ public class DependencyInjectionTests
         services.AddKomento(o => o.Experiments = new HashSet<string> { "exp-1" });
 
         var provider = services.BuildServiceProvider();
-        Assert.NotNull(provider.GetService<IExperimentClient>());
+        provider.GetService<IExperimentClient>().Should().NotBeNull();
     }
 
     [Fact]
@@ -23,7 +24,7 @@ public class DependencyInjectionTests
         services.AddKomento(o => o.Experiments = new HashSet<string> { "exp-1" });
 
         var provider = services.BuildServiceProvider();
-        Assert.NotNull(provider.GetService<IConfigUpdater>());
+        provider.GetService<IConfigUpdater>().Should().NotBeNull();
     }
 
     [Fact]
@@ -36,7 +37,7 @@ public class DependencyInjectionTests
         var client   = provider.GetRequiredService<IExperimentClient>();
         var updater  = provider.GetRequiredService<IConfigUpdater>();
 
-        Assert.Same(client, updater);
+        updater.Should().BeSameAs(client);
     }
 
     [Fact]
@@ -51,8 +52,8 @@ public class DependencyInjectionTests
 
         var client = provider.GetRequiredService<IExperimentClient>();
         var result = await client.GetVariantAsync("exp-1", "user-1", EvaluationContext.Empty);
-        Assert.True(result.IsEligible);
-        Assert.Equal("control", result.VariantName);
+        result.IsEligible.Should().BeTrue();
+        result.VariantName.Should().Be("control");
     }
 
     [Fact]
@@ -67,7 +68,7 @@ public class DependencyInjectionTests
 
         var client = provider.GetRequiredService<IExperimentClient>();
         var result = await client.GetVariantAsync("exp-1", "user-1", EvaluationContext.Empty);
-        Assert.Equal(VariantResult.NotFound, result);
+        result.Should().Be(VariantResult.NotFound);
     }
 
     private sealed class StubExperimentSource : IExperimentSource

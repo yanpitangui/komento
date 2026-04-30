@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using Komento;
 using Xunit;
 
@@ -9,7 +10,7 @@ public class EvaluationContextTests
     public void Empty_context_returns_false_for_any_key()
     {
         var ctx = EvaluationContext.Empty;
-        Assert.False(ctx.TryGetValue("any", out _));
+        ctx.TryGetValue("any", out _).Should().BeFalse();
     }
 
     [Fact]
@@ -20,10 +21,10 @@ public class EvaluationContextTests
             .Set("platform", "android")
             .Build();
 
-        Assert.True(ctx.TryGetValue("country", out var country));
-        Assert.Equal("BR", country);
-        Assert.True(ctx.TryGetValue("platform", out var platform));
-        Assert.Equal("android", platform);
+        ctx.TryGetValue("country", out var country).Should().BeTrue();
+        country.Should().Be("BR");
+        ctx.TryGetValue("platform", out var platform).Should().BeTrue();
+        platform.Should().Be("android");
     }
 
     [Fact]
@@ -34,8 +35,8 @@ public class EvaluationContextTests
             .Set("key", "second")
             .Build();
 
-        Assert.True(ctx.TryGetValue("key", out var value));
-        Assert.Equal("second", value);
+        ctx.TryGetValue("key", out var value).Should().BeTrue();
+        value.Should().Be("second");
     }
 
     [Fact]
@@ -44,16 +45,16 @@ public class EvaluationContextTests
         var baseCtx = EvaluationContext.Create().Set("region", "EU").Build();
         var ctx = EvaluationContextBuilder.CreateFrom(in baseCtx).Set("locale", "en-GB").Build();
 
-        Assert.True(ctx.TryGetValue("region", out var region));
-        Assert.Equal("EU", region);
-        Assert.True(ctx.TryGetValue("locale", out var locale));
-        Assert.Equal("en-GB", locale);
+        ctx.TryGetValue("region", out var region).Should().BeTrue();
+        region.Should().Be("EU");
+        ctx.TryGetValue("locale", out var locale).Should().BeTrue();
+        locale.Should().Be("en-GB");
     }
 
     [Fact]
     public void CreateFrom_empty_context_produces_empty_builder()
     {
         var ctx = EvaluationContextBuilder.CreateFrom(in EvaluationContext.Empty).Build();
-        Assert.False(ctx.TryGetValue("any", out _));
+        ctx.TryGetValue("any", out _).Should().BeFalse();
     }
 }

@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using Komento.Internals;
 using Xunit;
 
@@ -10,7 +11,7 @@ public class HasherTests
     {
         var b1 = Hasher.ComputeBucket("exp-123", "user-42");
         var b2 = Hasher.ComputeBucket("exp-123", "user-42");
-        Assert.Equal(b1, b2);
+        b1.Should().Be(b2);
     }
 
     [Fact]
@@ -19,7 +20,7 @@ public class HasherTests
         for (var i = 0; i < 100; i++)
         {
             var bucket = Hasher.ComputeBucket("exp-abc", $"user-{i}");
-            Assert.InRange(bucket, 1, 1000);
+            bucket.Should().BeInRange(1, 1000);
         }
     }
 
@@ -29,7 +30,7 @@ public class HasherTests
         var buckets = Enumerable.Range(0, 10)
             .Select(i => Hasher.ComputeBucket($"exp-{i}", "user-42"))
             .ToHashSet();
-        Assert.True(buckets.Count > 1);
+        (buckets.Count > 1).Should().BeTrue();
     }
 
     [Fact]
@@ -43,6 +44,6 @@ public class HasherTests
             counts[bucket - 1]++;
         }
         foreach (var count in counts)
-            Assert.InRange(count, 1, 50);
+            count.Should().BeInRange(1, 50);
     }
 }
