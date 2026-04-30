@@ -1,2 +1,4 @@
-// Benchmarks entry point — populated in Task 14
-return;
+using BenchmarkDotNet.Running;
+
+BenchmarkRunner.Run<ExperimentClientBenchmarks>();
+BenchmarkRunner.Run<BinSetBenchmarks>();
