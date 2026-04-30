@@ -35,7 +35,7 @@ jobs:
         run: >
           dotnet-coverage collect -f cobertura -o coverage.xml
           -- dotnet test Komento.slnx --no-build -c Release
-          --logger "trx;LogFileName=results.trx"
+          --logger trx
           --results-directory ./test-results
 
       - name: Publish test results
