@@ -15,6 +15,11 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReleaseNotes Condition="'$(PackageReleaseNotesBase64)' != ''">
+      $([System.Text.Encoding]::UTF8.GetString(
+      [System.Convert]::FromBase64String('$(PackageReleaseNotesBase64)')
+      ))
+    </PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
