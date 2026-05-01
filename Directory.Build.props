@@ -4,5 +4,21 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <Authors>yanpitangui</Authors>
+    <PackageProjectUrl>https://github.com/yanpitangui/komento</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/yanpitangui/komento</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>komento;feature-flags;experimentation;openfeature;aspnetcore</PackageTags>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" Visible="false" PackagePath="\" />
+  </ItemGroup>
 </Project>

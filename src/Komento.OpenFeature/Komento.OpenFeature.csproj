@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>OpenFeature provider adapter for Komento.</Description>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="OpenFeature" />
     <ProjectReference Include="..\Komento\Komento.csproj" />
