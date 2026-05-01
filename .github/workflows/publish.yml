@@ -1,0 +1,101 @@
+name: Publish NuGet Packages
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      package_version:
+        description: Package version to publish
+        required: true
+      package_release_notes:
+        description: Release notes to embed in the NuGet package
+        required: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      PACKAGE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.package_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          key: nuget-${{ hashFiles('Directory.Packages.props') }}
+          path: ~/.nuget/packages
+
+      - name: Normalize package version
+        shell: bash
+        run: |
+          version="${PACKAGE_VERSION#v}"
+          if [ -z "$version" ]; then
+            echo "Package version is required" >&2
+            exit 1
+          fi
+          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Capture package release notes
+        shell: bash
+        run: |
+          {
+            echo 'PACKAGE_RELEASE_NOTES<<EOF'
+            if [ "${{ github.event_name }}" = "release" ]; then
+              cat <<'NOTES'
+${{ github.event.release.body }}
+NOTES
+            else
+              cat <<'NOTES'
+${{ inputs.package_release_notes }}
+NOTES
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test Komento.slnx --no-build -c Release
+
+      - name: Pack
+        shell: bash
+        run: |
+          mkdir -p .artifacts
+          pack_args=()
+          if [ -n "$PACKAGE_RELEASE_NOTES" ]; then
+            pack_args+=("-p:PackageReleaseNotes=$PACKAGE_RELEASE_NOTES")
+          fi
+          for project in src/Komento/Komento.csproj src/Komento.AspNetCore/Komento.AspNetCore.csproj src/Komento.OpenFeature/Komento.OpenFeature.csproj; do
+            dotnet pack "$project" \
+              --no-build \
+              -c Release \
+              -o .artifacts \
+              -p:PackageVersion="$PACKAGE_VERSION" \
+              "${pack_args[@]}"
+          done
+
+      - name: Push NuGet packages
+        if: env.NUGET_API_KEY != ''
+        run: dotnet nuget push ".artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Push symbol packages
+        if: env.NUGET_API_KEY != ''
+        run: dotnet nuget push ".artifacts/*.snupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
