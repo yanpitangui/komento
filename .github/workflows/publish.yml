@@ -60,8 +60,17 @@ jobs:
           echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Resolved version: $VERSION"
 
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test Komento.slnx --no-build -c Release
+
       # ---------------------------
-      # Pack (bulletproof)
+      # Pack (robust + safe)
       # ---------------------------
       - name: Pack
         shell: bash
@@ -69,15 +78,29 @@ jobs:
           shopt -s globstar nullglob
           mkdir -p .artifacts
 
-          # Prepare release notes safely
+          # Prepare release notes
           if [ "${{ github.event_name }}" = "release" ]; then
             printf "%s" "${{ github.event.release.body }}" > release_notes.txt
           else
             printf "%s" "${{ inputs.package_release_notes }}" > release_notes.txt
           fi
 
-          # Encode to base64 (single line, no wrapping)
-          NOTES_BASE64=$(base64 -w 0 release_notes.txt)
+          # Generate props file safely (no heredoc issues)
+          {
+            echo '<Project>'
+            echo '  <PropertyGroup>'
+            echo '    <PackageReleaseNotes>'
+            sed \
+              -e 's/&/\&amp;/g' \
+              -e 's/</\&lt;/g' \
+              -e 's/>/\&gt;/g' \
+              -e "s/'/\&apos;/g" \
+              -e 's/"/\&quot;/g' \
+              release_notes.txt
+            echo '    </PackageReleaseNotes>'
+            echo '  </PropertyGroup>'
+            echo '</Project>'
+          } > ReleaseNotes.props
 
           for project in src/**/*.csproj; do
             if grep -Eq '<IsPackable>\s*false\s*</IsPackable>' "$project"; then
@@ -87,18 +110,12 @@ jobs:
 
             echo "Packing: $project"
 
-            dotnet restore "$project"
-
-            dotnet build "$project" \
-              -c Release \
-              --no-restore
-
             dotnet pack "$project" \
               --no-build \
               -c Release \
               -o .artifacts \
               -p:PackageVersion="$PACKAGE_VERSION" \
-              -p:PackageReleaseNotesBase64="$NOTES_BASE64"
+              -p:CustomAfterMicrosoftCommonProps="$(pwd)/ReleaseNotes.props"
           done
 
       # ---------------------------
