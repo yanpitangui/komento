@@ -139,6 +139,8 @@ public interface IExperimentClient
     ValueTask<string> GetStringAsync(string flagKey, string subjectId, in EvaluationContext ctx, string defaultValue = "",      CancellationToken ct = default);
     ValueTask<int>    GetIntAsync   (string flagKey, string subjectId, in EvaluationContext ctx, int    defaultValue = default, CancellationToken ct = default);
     ValueTask<double> GetDoubleAsync(string flagKey, string subjectId, in EvaluationContext ctx, double defaultValue = default, CancellationToken ct = default);
+
+    bool ExperimentExists(string flagKey);
 }
 ```
 
@@ -147,6 +149,8 @@ public interface IExperimentClient
 **What it solves:** Defines the contract for flag evaluation independently of the engine implementation. Application code, ASP.NET Core filters, and OpenFeature adapters all depend on this interface — never on the concrete `ExperimentClient`.
 
 **`GetVariantAsync` is canonical.** The typed helpers (`GetBoolAsync`, etc.) call it internally and unwrap `VariantResult.Value`. Use `GetVariantAsync` when you need the full result (eligibility, outsider status, variant name). Use the typed helpers for simple on/off flags with a typed payload.
+
+**`ExperimentExists`:** A fast existence check for adapters that need to distinguish "flag not found" from "subject ineligible". `Komento.OpenFeature` uses this to emit OpenFeature's `FLAG_NOT_FOUND` only for genuinely missing experiments.
 
 **`in EvaluationContext`:** The context is passed by reference (no struct copy). Build it once per request or operation and pass it through.
 
