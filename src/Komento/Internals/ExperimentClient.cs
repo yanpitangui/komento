@@ -125,6 +125,9 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater
         }
     }
 
+    public bool ExperimentExists(string flagKey)
+        => Volatile.Read(ref _experiments).ContainsKey(flagKey);
+
     // ── Evaluation paths ──────────────────────────────────────────────────────
 
     private VariantResult EvaluateSync(
