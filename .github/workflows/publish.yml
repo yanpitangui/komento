@@ -20,7 +20,6 @@ jobs:
 
     env:
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-      PACKAGE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.package_version }}
 
     steps:
       - name: Checkout
@@ -36,34 +35,47 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
-          key: nuget-${{ hashFiles('Directory.Packages.props') }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props') }}
           path: ~/.nuget/packages
 
-      - name: Normalize package version
+      # ---------------------------
+      # Resolve version safely
+      # ---------------------------
+      - name: Resolve package version
         shell: bash
         run: |
-          version="${PACKAGE_VERSION#v}"
-          if [ -z "$version" ]; then
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ inputs.package_version }}"
+          fi
+
+          VERSION="${VERSION#v}"
+
+          if [ -z "$VERSION" ]; then
             echo "Package version is required" >&2
             exit 1
           fi
-          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
 
-      - name: Capture package release notes
+          echo "PACKAGE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Resolved version: $VERSION"
+
+      # ---------------------------
+      # Capture release notes safely
+      # ---------------------------
+      - name: Capture release notes
         shell: bash
         run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            printf "%s" "${{ github.event.release.body }}" > release_notes.txt
+          else
+            printf "%s" "${{ inputs.package_release_notes }}" > release_notes.txt
+          fi
+
           {
-            echo 'PACKAGE_RELEASE_NOTES<<EOF'
-            if [ "${{ github.event_name }}" = "release" ]; then
-              cat <<'NOTES'
-${{ github.event.release.body }}
-NOTES
-            else
-              cat <<'NOTES'
-${{ inputs.package_release_notes }}
-NOTES
-            fi
-            echo 'EOF'
+            echo "PACKAGE_RELEASE_NOTES<<EOF"
+            cat release_notes.txt
+            echo "EOF"
           } >> "$GITHUB_ENV"
 
       - name: Restore
@@ -75,32 +87,46 @@ NOTES
       - name: Test
         run: dotnet test Komento.slnx --no-build -c Release
 
+      # ---------------------------
+      # Pack (safe + robust)
+      # ---------------------------
       - name: Pack
         shell: bash
         run: |
           shopt -s globstar nullglob
           mkdir -p .artifacts
-          pack_args=()
-          if [ -n "$PACKAGE_RELEASE_NOTES" ]; then
-            pack_args+=("-p:PackageReleaseNotes=$PACKAGE_RELEASE_NOTES")
-          fi
+
           for project in src/**/*.csproj; do
             if grep -Eq '<IsPackable>\s*false\s*</IsPackable>' "$project"; then
               echo "Skipping non-packable project: $project"
               continue
             fi
+
+            echo "Packing: $project"
+
             dotnet pack "$project" \
               --no-build \
               -c Release \
               -o .artifacts \
               -p:PackageVersion="$PACKAGE_VERSION" \
-              "${pack_args[@]}"
+              -p:PackageReleaseNotes="$PACKAGE_RELEASE_NOTES"
           done
 
+      # ---------------------------
+      # Push packages
+      # ---------------------------
       - name: Push NuGet packages
         if: env.NUGET_API_KEY != ''
-        run: dotnet nuget push ".artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: |
+          dotnet nuget push ".artifacts/*.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
 
       - name: Push symbol packages
         if: env.NUGET_API_KEY != ''
-        run: dotnet nuget push ".artifacts/*.snupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: |
+          dotnet nuget push ".artifacts/*.snupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
