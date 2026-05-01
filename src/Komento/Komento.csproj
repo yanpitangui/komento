@@ -11,6 +11,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Komento.Tests" />
     <InternalsVisibleTo Include="Komento.AspNetCore.Tests" />
+    <InternalsVisibleTo Include="Komento.OpenFeature.Tests" />
     <InternalsVisibleTo Include="Komento.Benchmarks" />
   </ItemGroup>
 </Project>
