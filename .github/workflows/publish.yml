@@ -78,12 +78,17 @@ NOTES
       - name: Pack
         shell: bash
         run: |
+          shopt -s globstar nullglob
           mkdir -p .artifacts
           pack_args=()
           if [ -n "$PACKAGE_RELEASE_NOTES" ]; then
             pack_args+=("-p:PackageReleaseNotes=$PACKAGE_RELEASE_NOTES")
           fi
-          for project in src/Komento/Komento.csproj src/Komento.AspNetCore/Komento.AspNetCore.csproj src/Komento.OpenFeature/Komento.OpenFeature.csproj; do
+          for project in src/**/*.csproj; do
+            if grep -Eq '<IsPackable>\s*false\s*</IsPackable>' "$project"; then
+              echo "Skipping non-packable project: $project"
+              continue
+            fi
             dotnet pack "$project" \
               --no-build \
               -c Release \
