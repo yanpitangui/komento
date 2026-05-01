@@ -16,8 +16,8 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PackageReleaseNotes Condition="'$(PackageReleaseNotesBase64)' != ''">
-      $([System.Text.Encoding]::UTF8.GetString(
-      [System.Convert]::FromBase64String('$(PackageReleaseNotesBase64)')
+      $([System.Text.Encoding]::GetEncoding(65001).GetString(
+      $([System.Convert]::FromBase64String('$(PackageReleaseNotesBase64)'))
       ))
     </PackageReleaseNotes>
   </PropertyGroup>
