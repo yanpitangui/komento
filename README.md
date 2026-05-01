@@ -13,7 +13,7 @@ if (result == "treatment")
 - Zero I/O in the hot path — all evaluation is in-memory.
 - Near-zero allocations — `ValueTask`, `Span<T>`, `FrozenDictionary`, `ArrayPool<T>`.
 - Pluggable at every seam — swap in your own config source, segment store, subject resolver, or context enricher.
-- OpenFeature-compatible surface in mind for future alignment.
+- OpenFeature support via the `Komento.OpenFeature` provider package.
 
 ---
 
@@ -23,6 +23,7 @@ if (result == "treatment")
 |---|---|
 | `Komento` | Core engine, all interfaces, DI registration |
 | `Komento.AspNetCore` | `[RequireVariant]` action filter, `.RequireVariant()` endpoint filter, subject provider and context enricher abstractions |
+| `Komento.OpenFeature` | OpenFeature `FeatureProvider` adapter over `IExperimentClient` |
 
 ---
 
@@ -78,6 +79,40 @@ Typed helpers are available for simple flag cases:
 bool enabled = await experiments.GetBoolAsync("dark-mode", userId, ctx);
 string theme  = await experiments.GetStringAsync("ui-theme", userId, ctx, defaultValue: "default");
 ```
+
+### 4. Use Komento through OpenFeature
+
+If your application already uses the OpenFeature .NET SDK, install `Komento.OpenFeature` and register `KomentoFeatureProvider` with the OpenFeature API.
+
+```csharp
+using Komento.OpenFeature;
+using OpenFeature;
+using OpenFeature.Model;
+
+await app.Services.InitializeKomentoAsync();
+
+var experimentClient = app.Services.GetRequiredService<IExperimentClient>();
+Api.Instance.SetProvider(new KomentoFeatureProvider(experimentClient));
+
+var client = Api.Instance.GetClient();
+var ctx = EvaluationContext.Builder()
+    .SetTargetingKey(userId)
+    .Set("platform", new Value("web"))
+    .Build();
+
+bool enabled = await client.GetBooleanValueAsync("dark-mode", false, ctx);
+string theme = await client.GetStringValueAsync("ui-theme", "default", ctx);
+```
+
+`KomentoFeatureProvider` maps OpenFeature requests onto `IExperimentClient`:
+
+| OpenFeature result | Komento behavior |
+|---|---|
+| `TARGETING_KEY_MISSING` | OpenFeature context has no `targetingKey` |
+| `FLAG_NOT_FOUND` | `IExperimentClient.ExperimentExists(flagKey)` is false |
+| `DEFAULT` | Subject is ineligible or an outsider |
+| `TARGETING_MATCH` | Subject was assigned a variant and the value type matched |
+| `PARSE_ERROR` | Variant value existed but could not be converted to the requested OpenFeature type |
 
 ---
 

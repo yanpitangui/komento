@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="OpenFeature" />
+    <ProjectReference Include="..\Komento\Komento.csproj" />
+  </ItemGroup>
+</Project>

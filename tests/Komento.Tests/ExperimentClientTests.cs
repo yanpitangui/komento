@@ -484,4 +484,28 @@ public class ExperimentClientTests
         var result = await client.GetVariantAsync("async-override", "vip", EvaluationContext.Empty);
         (result == "treatment").Should().BeTrue();
     }
+
+    // ── ExperimentExists ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void ExperimentExists_returns_false_for_unknown_experiment()
+    {
+        var client = BuildClient();
+        client.ExperimentExists("does-not-exist").Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExperimentExists_returns_true_for_loaded_experiment()
+    {
+        var client = BuildClient();
+        client.ExperimentExists("exp-1").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExperimentExists_returns_false_after_removal()
+    {
+        var client = BuildClient();
+        await client.RemoveAsync("exp-1");
+        client.ExperimentExists("exp-1").Should().BeFalse();
+    }
 }
