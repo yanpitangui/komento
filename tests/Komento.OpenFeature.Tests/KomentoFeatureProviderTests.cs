@@ -75,6 +75,18 @@ public class KomentoFeatureProviderTests
         result.ErrorType.Should().Be(ErrorType.TargetingKeyMissing);
     }
 
+    [Fact]
+    public async Task ResolveBooleanValue_empty_targeting_key_returns_TargetingKeyMissing()
+    {
+        var provider = new KomentoFeatureProvider(BuildClient());
+        var ctx = OFContext.Builder().SetTargetingKey(string.Empty).Build();
+
+        var result = await provider.ResolveBooleanValueAsync("bool-flag", false, ctx);
+
+        result.ErrorType.Should().Be(ErrorType.TargetingKeyMissing);
+        result.Reason.Should().Be(Reason.Error);
+    }
+
     // ── flag not found ────────────────────────────────────────────────────────
 
     [Fact]
@@ -384,6 +396,46 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.Error);
     }
 
+    [Fact]
+    public async Task ResolveStructureValue_null_variant_returns_ParseError()
+    {
+        var config = new ExperimentConfig
+        {
+            Id          = "struct-null",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "treatment", Allocation = 1.0, Value = null }]
+        };
+        var provider = new KomentoFeatureProvider(BuildClient(config));
+        var ctx = CtxFor("user-1");
+
+        var result = await provider.ResolveStructureValueAsync("struct-null", new Value(), ctx);
+
+        result.ErrorType.Should().Be(ErrorType.ParseError);
+        result.Reason.Should().Be(Reason.Error);
+    }
+
+    [Fact]
+    public async Task ResolveStructureValue_array_serializes_via_json()
+    {
+        object[] payload = ["hello", false, 2];
+        var config = new ExperimentConfig
+        {
+            Id          = "struct-array",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "treatment", Allocation = 1.0, Value = payload }]
+        };
+        var provider = new KomentoFeatureProvider(BuildClient(config));
+        var ctx = CtxFor("user-1");
+
+        var result = await provider.ResolveStructureValueAsync("struct-array", new Value(), ctx);
+
+        result.Value.IsList.Should().BeTrue();
+        result.Value.AsList.Should().HaveCount(3);
+        result.Value.AsList[0].AsString.Should().Be("hello");
+        result.Value.AsList[1].AsBoolean.Should().BeFalse();
+        result.Value.AsList[2].AsDouble.Should().Be(2);
+    }
+
     // ── context attribute forwarding ──────────────────────────────────────────
 
     [Fact]
@@ -452,5 +504,61 @@ public class KomentoFeatureProviderTests
 
         result.Value.Should().BeTrue();
         result.Reason.Should().Be(Reason.TargetingMatch);
+    }
+
+    [Fact]
+    public async Task Boolean_and_number_context_attributes_are_forwarded()
+    {
+        var client = new CapturingExperimentClient(new VariantResult
+        {
+            VariantName = "treatment",
+            Value = true,
+            IsEligible = true
+        });
+        var provider = new KomentoFeatureProvider(client);
+        var ignored = Structure.Builder().Set("x", "y").Build();
+        var ctx = OFContext.Builder()
+            .SetTargetingKey("user-1")
+            .Set("isAdmin", new Value(true))
+            .Set("quota", new Value(42))
+            .Set("ignored", new Value(ignored))
+            .Build();
+
+        var result = await provider.ResolveBooleanValueAsync("bool-flag", false, ctx);
+
+        result.Value.Should().BeTrue();
+        client.LastSubjectId.Should().Be("user-1");
+        client.LastContext.TryGetValue("isAdmin", out var isAdmin).Should().BeTrue();
+        isAdmin.Should().Be(true);
+        client.LastContext.TryGetValue("quota", out var quota).Should().BeTrue();
+        quota.Should().Be(42d);
+        client.LastContext.TryGetValue("ignored", out _).Should().BeFalse();
+    }
+
+    private sealed class CapturingExperimentClient(VariantResult result) : IExperimentClient
+    {
+        public string? LastSubjectId { get; private set; }
+        public EvaluationContext LastContext { get; private set; } = EvaluationContext.Empty;
+
+        public bool ExperimentExists(string flagKey) => true;
+
+        public ValueTask<VariantResult> GetVariantAsync(string flagKey, string subjectId, in EvaluationContext ctx, CancellationToken ct = default)
+        {
+            LastSubjectId = subjectId;
+            LastContext = ctx;
+            return ValueTask.FromResult(result);
+        }
+
+        public ValueTask<bool> GetBoolAsync(string flagKey, string subjectId, in EvaluationContext ctx, bool defaultValue = default, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public ValueTask<string> GetStringAsync(string flagKey, string subjectId, in EvaluationContext ctx, string defaultValue = "", CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public ValueTask<int> GetIntAsync(string flagKey, string subjectId, in EvaluationContext ctx, int defaultValue = default, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public ValueTask<double> GetDoubleAsync(string flagKey, string subjectId, in EvaluationContext ctx, double defaultValue = default, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }
