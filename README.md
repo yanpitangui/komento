@@ -19,12 +19,11 @@ if (result == "treatment")
 
 ## Packages
 
-| Package | Purpose |
-|---|---|
-| `Komento` | Core engine, all interfaces, DI registration |
-| `Komento.AspNetCore` | `[RequireVariant]` action filter, `.RequireVariant()` endpoint filter, subject provider and context enricher abstractions |
-| `Komento.OpenFeature` | OpenFeature `FeatureProvider` adapter over `IExperimentClient` |
-
+| Package | Purpose | NuGet |
+|---|---|---|
+| Komento | Core engine, all interfaces, DI registration | [![NuGet](https://img.shields.io/nuget/v/Komento.svg)](https://www.nuget.org/packages/Komento) |
+| Komento.AspNetCore | ASP.NET Core integration (filters, subject provider, enrichers) | [![NuGet](https://img.shields.io/nuget/v/Komento.AspNetCore.svg)](https://www.nuget.org/packages/Komento.AspNetCore) |
+| Komento.OpenFeature | OpenFeature provider adapter | [![NuGet](https://img.shields.io/nuget/v/Komento.OpenFeature.svg)](https://www.nuget.org/packages/Komento.OpenFeature) |
 ---
 
 ## Quick start
