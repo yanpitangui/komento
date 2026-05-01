@@ -500,4 +500,12 @@ public class ExperimentClientTests
         var client = BuildClient();
         client.ExperimentExists("exp-1").Should().BeTrue();
     }
+
+    [Fact]
+    public async Task ExperimentExists_returns_false_after_removal()
+    {
+        var client = BuildClient();
+        await client.RemoveAsync("exp-1");
+        client.ExperimentExists("exp-1").Should().BeFalse();
+    }
 }
