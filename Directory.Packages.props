@@ -19,7 +19,6 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
 
     <!-- Aspire Hosting (AppHost only) -->
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.2.4" />
     <PackageVersion Include="Aspire.Hosting.Nats" Version="13.2.4" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.2.4" />
 

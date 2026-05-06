@@ -12,4 +12,10 @@
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Komento.Benchmarks/Komento.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Komento.Sample.AppHost/Komento.Sample.AppHost.csproj" />
+    <Project Path="samples/Komento.Sample.EcommerceApi/Komento.Sample.EcommerceApi.csproj" />
+    <Project Path="samples/Komento.Sample.AdminApi/Komento.Sample.AdminApi.csproj" />
+    <Project Path="samples/Komento.Sample.ServiceDefaults/Komento.Sample.ServiceDefaults.csproj" />
+  </Folder>
 </Solution>
