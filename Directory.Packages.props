@@ -17,5 +17,20 @@
     <PackageVersion Include="System.IO.Hashing" Version="8.0.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+
+    <!-- Aspire Hosting (AppHost only) -->
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.0.0" />
+    <PackageVersion Include="Aspire.Hosting.Nats" Version="9.0.0" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="9.0.0" />
+
+    <!-- Aspire Client Integrations (EcommerceApi + AdminApi) -->
+    <PackageVersion Include="Aspire.Nats.Client" Version="9.0.0" />
+    <PackageVersion Include="Aspire.Npgsql" Version="9.0.0" />
+
+    <!-- Authentication (EcommerceApi) -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+
+    <!-- Service Discovery (ServiceDefaults) -->
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="9.0.0" />
   </ItemGroup>
 </Project>
