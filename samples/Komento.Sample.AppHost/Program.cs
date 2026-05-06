@@ -1,7 +1,6 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 var postgres = builder.AddPostgres("postgres")
-    .WithDataVolume()
     .WithInitFiles("./init")
     .AddDatabase("komento-db");
 

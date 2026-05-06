@@ -27,14 +27,14 @@ public sealed class AppHostFixture : IAsyncInitializer, IAsyncDisposable
         await notifications.WaitForResourceHealthyAsync("ecommerce-api", cts.Token);
         await notifications.WaitForResourceHealthyAsync("admin-api",     cts.Token);
 
-        EcommerceClient = _app.CreateHttpClient("ecommerce-api");
-        AdminClient     = _app.CreateHttpClient("admin-api");
+        EcommerceClient = _app.CreateHttpClient("ecommerce-api", "http");
+        AdminClient     = _app.CreateHttpClient("admin-api", "http");
     }
 
     public async ValueTask DisposeAsync()
     {
-        EcommerceClient.Dispose();
-        AdminClient.Dispose();
+        EcommerceClient?.Dispose();
+        AdminClient?.Dispose();
         if (_app is not null)
             await _app.DisposeAsync();
     }

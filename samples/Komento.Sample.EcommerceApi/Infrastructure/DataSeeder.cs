@@ -1,42 +1,17 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Komento;
 using NATS.Client.Core;
 using NATS.Client.KeyValueStore;
 using NATS.Net;
-using Npgsql;
 
 namespace Komento.Sample.EcommerceApi.Infrastructure;
 
-internal sealed class DataSeeder(INatsConnection nats, NpgsqlDataSource db)
+internal sealed class DataSeeder(INatsConnection nats)
 {
-    private static readonly string[] VipUsers =
-        ["user-1", "user-2", "user-3", "user-4", "user-5",
-         "user-6", "user-7", "user-8", "user-9", "user-10"];
-
     private static readonly string[] LoyaltyUsers = ["user-1", "user-2"];
 
-    public async Task SeedAsync(CancellationToken ct = default)
-    {
-        await SeedPostgresAsync(ct);
-        await SeedNatsAsync(ct);
-    }
-
-    private async Task SeedPostgresAsync(CancellationToken ct)
-    {
-        await using var conn = await db.OpenConnectionAsync(ct);
-
-        await using var check = new NpgsqlCommand("SELECT COUNT(*) FROM vip_users", conn);
-        var count = (long)(await check.ExecuteScalarAsync(ct))!;
-        if (count > 0) return;
-
-        foreach (var userId in VipUsers)
-        {
-            await using var insert = new NpgsqlCommand(
-                "INSERT INTO vip_users (user_id) VALUES ($1) ON CONFLICT DO NOTHING", conn);
-            insert.Parameters.AddWithValue(userId);
-            await insert.ExecuteNonQueryAsync(ct);
-        }
-    }
+    public Task SeedAsync(CancellationToken ct = default) => SeedNatsAsync(ct);
 
     private async Task SeedNatsAsync(CancellationToken ct)
     {
@@ -108,5 +83,27 @@ internal static class ExperimentSeed
 
 internal static class SampleJsonOptions
 {
-    public static readonly JsonSerializerOptions Default = new(JsonSerializerDefaults.Web);
+    public static readonly JsonSerializerOptions Default = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new ObjectPrimitiveConverter() }
+    };
+}
+
+// STJ deserializes object? as JsonElement by default; this maps JSON primitives to native types
+// so that VariantConfig.Value round-trips correctly through NATS (bool stays bool, string stays string).
+internal sealed class ObjectPrimitiveConverter : JsonConverter<object?>
+{
+    public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => reader.TokenType switch
+        {
+            JsonTokenType.True   => true,
+            JsonTokenType.False  => false,
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => reader.TryGetInt64(out var l) ? (object)l : reader.GetDouble(),
+            JsonTokenType.Null   => null,
+            _                    => JsonSerializer.Deserialize<JsonElement>(ref reader, options)
+        };
+
+    public override void Write(Utf8JsonWriter writer, object? value, JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, value?.GetType() ?? typeof(object), options);
 }
