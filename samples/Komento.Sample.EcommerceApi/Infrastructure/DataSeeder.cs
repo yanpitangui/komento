@@ -25,10 +25,6 @@ internal sealed class DataSeeder(INatsConnection nats, NpgsqlDataSource db)
     {
         await using var conn = await db.OpenConnectionAsync(ct);
 
-        await using var createTable = new NpgsqlCommand(
-            "CREATE TABLE IF NOT EXISTS vip_users (user_id TEXT PRIMARY KEY)", conn);
-        await createTable.ExecuteNonQueryAsync(ct);
-
         await using var check = new NpgsqlCommand("SELECT COUNT(*) FROM vip_users", conn);
         var count = (long)(await check.ExecuteScalarAsync(ct))!;
         if (count > 0) return;
