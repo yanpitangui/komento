@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.NATS.Net" />
+    <PackageReference Include="Aspire.Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Komento/Komento.csproj" />
+    <ProjectReference Include="../Komento.Sample.ServiceDefaults/Komento.Sample.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>
