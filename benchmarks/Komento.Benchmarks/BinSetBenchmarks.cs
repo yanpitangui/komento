@@ -1,5 +1,5 @@
 using BenchmarkDotNet.Attributes;
-using Komento.Internals;
+using Komento;
 
 /// <summary>
 /// Benchmarks for the BinSet segment store (binary search on sorted XxHash64 hashes).
