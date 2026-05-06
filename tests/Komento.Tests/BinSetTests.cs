@@ -1,5 +1,4 @@
 using AwesomeAssertions;
-using Komento.Internals;
 using Xunit;
 
 namespace Komento.Tests;

@@ -1,9 +1,9 @@
 using System.IO.Hashing;
 using System.Text;
 
-namespace Komento.Internals;
+namespace Komento;
 
-internal static class BinSet
+public static class BinSet
 {
     private const int EntrySize = 8; // XxHash64 → 8 bytes per entry
 
