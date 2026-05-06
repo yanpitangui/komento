@@ -19,18 +19,18 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
 
     <!-- Aspire Hosting (AppHost only) -->
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.0.0" />
-    <PackageVersion Include="Aspire.Hosting.Nats" Version="9.0.0" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="9.0.0" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.2.4" />
+    <PackageVersion Include="Aspire.Hosting.Nats" Version="13.2.4" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.2.4" />
 
     <!-- Aspire Client Integrations (EcommerceApi + AdminApi) -->
-    <PackageVersion Include="Aspire.Nats.Client" Version="9.0.0" />
-    <PackageVersion Include="Aspire.Npgsql" Version="9.0.0" />
+    <PackageVersion Include="Aspire.NATS.Net" Version="13.2.4" />
+    <PackageVersion Include="Aspire.Npgsql" Version="13.2.4" />
 
     <!-- Authentication (EcommerceApi) -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
 
     <!-- Service Discovery (ServiceDefaults) -->
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.5.0" />
   </ItemGroup>
 </Project>
