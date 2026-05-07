@@ -67,7 +67,7 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       - name: Test
-        run: dotnet test Komento.slnx --no-build -c Release
+        run: dotnet test --solution Komento.slnx --no-build -c Release
 
       # ---------------------------
       # Pack (robust + safe)
