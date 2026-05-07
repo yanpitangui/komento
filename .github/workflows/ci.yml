@@ -35,15 +35,14 @@ jobs:
         run: >
           dotnet-coverage collect -f cobertura -o coverage.xml
           -- dotnet test --solution Komento.slnx --no-build -c Release
-          --logger trx
-          --results-directory ./test-results
+          --report-trx
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
         if: always()
         with:
           name: TUnit
-          path: test-results/**/*.trx
+          path: TestResults/**/*.trx
           reporter: dotnet-trx
           fail-on-error: true
 
