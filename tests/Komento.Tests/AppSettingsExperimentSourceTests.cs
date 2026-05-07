@@ -2,7 +2,7 @@ using System.Text;
 using AwesomeAssertions;
 using Komento;
 using Microsoft.Extensions.Configuration;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.Tests;
 
@@ -45,7 +45,7 @@ public class AppSettingsExperimentSourceTests
     }
     """;
 
-    [Fact]
+    [Test]
     public async Task Loads_only_requested_experiment_ids()
     {
         var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
@@ -56,7 +56,7 @@ public class AppSettingsExperimentSourceTests
         result.ContainsKey("checkout-flow").Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task Deserializes_variants_with_allocation_and_coerced_value()
     {
         var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
@@ -69,7 +69,7 @@ public class AppSettingsExperimentSourceTests
         config.Variants[1].Value.Should().Be(true);
     }
 
-    [Fact]
+    [Test]
     public async Task Deserializes_trait_equals_filter()
     {
         var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
@@ -82,7 +82,7 @@ public class AppSettingsExperimentSourceTests
         filter.Value.Should().Be("BR");
     }
 
-    [Fact]
+    [Test]
     public async Task Deserializes_subject_and_segment_overrides()
     {
         var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
@@ -94,7 +94,7 @@ public class AppSettingsExperimentSourceTests
         config.Overrides[1].Should().BeOfType<SegmentOverride>();
     }
 
-    [Fact]
+    [Test]
     public async Task Returns_empty_when_no_ids_match()
     {
         var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
@@ -102,7 +102,7 @@ public class AppSettingsExperimentSourceTests
         result.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Custom_section_path_is_respected()
     {
         var json = """
@@ -125,7 +125,7 @@ public class AppSettingsExperimentSourceTests
 
     // ── Value coercion ────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task CoerceValue_parses_integer_string()
     {
         var json = """
@@ -144,7 +144,7 @@ public class AppSettingsExperimentSourceTests
         result["int-exp"].Variants[0].Value.Should().Be(42);
     }
 
-    [Fact]
+    [Test]
     public async Task CoerceValue_parses_double_string()
     {
         var json = """
@@ -163,7 +163,7 @@ public class AppSettingsExperimentSourceTests
         result["dbl-exp"].Variants[0].Value.Should().Be(3.14);
     }
 
-    [Fact]
+    [Test]
     public async Task CoerceValue_keeps_unrecognised_string_as_string()
     {
         var json = """
@@ -184,7 +184,7 @@ public class AppSettingsExperimentSourceTests
 
     // ── Error paths ───────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task Unknown_filter_type_throws_InvalidOperationException()
     {
         var json = """
@@ -205,7 +205,7 @@ public class AppSettingsExperimentSourceTests
             .WithMessage("*unknown-filter*");
     }
 
-    [Fact]
+    [Test]
     public async Task Unknown_override_type_throws_InvalidOperationException()
     {
         var json = """

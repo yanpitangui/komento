@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.AspNetCore.Tests;
 
@@ -70,7 +70,7 @@ public class EnricherTests
         public async ValueTask DisposeAsync() => await _app.StopAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task Enricher_passes_context_that_satisfies_filter()
     {
         await using var app    = await TestApp.CreateAsync();
@@ -81,7 +81,7 @@ public class EnricherTests
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task Enricher_absent_context_fails_filter_and_blocks()
     {
         await using var app = await TestApp.CreateAsync();
@@ -89,7 +89,7 @@ public class EnricherTests
         resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Enricher_wrong_country_fails_filter_and_blocks()
     {
         await using var app    = await TestApp.CreateAsync();

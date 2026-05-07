@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.AspNetCore.Tests;
 
@@ -58,7 +58,7 @@ public class RequireVariantTests
         public async ValueTask DisposeAsync() => await _app.StopAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task Endpoint_filter_allows_when_variant_matches()
     {
         await using var app = await TestApp.CreateAsync(FullAlloc("treatment"), "treatment", "user-1");
@@ -66,7 +66,7 @@ public class RequireVariantTests
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task Endpoint_filter_blocks_when_variant_does_not_match()
     {
         await using var app = await TestApp.CreateAsync(FullAlloc("control"), "treatment", "user-1");
@@ -74,7 +74,7 @@ public class RequireVariantTests
         resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Endpoint_filter_returns_404_when_no_subject_provider()
     {
         await using var app = await TestApp.CreateAsync(FullAlloc("treatment"), "treatment");

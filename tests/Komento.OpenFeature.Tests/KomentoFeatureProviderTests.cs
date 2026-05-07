@@ -4,7 +4,7 @@ using Komento.Internals;
 using Komento.OpenFeature;
 using OpenFeature.Constant;
 using OpenFeature.Model;
-using Xunit;
+using TUnit.Core;
 using OFContext = OpenFeature.Model.EvaluationContext;
 
 namespace Komento.OpenFeature.Tests;
@@ -43,7 +43,7 @@ public class KomentoFeatureProviderTests
 
     // ── metadata ─────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public void GetMetadata_returns_Komento()
     {
         var provider = new KomentoFeatureProvider(BuildClient());
@@ -52,7 +52,7 @@ public class KomentoFeatureProviderTests
 
     // ── targeting key missing ─────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_no_targeting_key_returns_TargetingKeyMissing()
     {
         var provider = new KomentoFeatureProvider(BuildClient());
@@ -65,7 +65,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.Error);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_null_context_returns_TargetingKeyMissing()
     {
         var provider = new KomentoFeatureProvider(BuildClient());
@@ -75,7 +75,7 @@ public class KomentoFeatureProviderTests
         result.ErrorType.Should().Be(ErrorType.TargetingKeyMissing);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_empty_targeting_key_returns_TargetingKeyMissing()
     {
         var provider = new KomentoFeatureProvider(BuildClient());
@@ -89,7 +89,7 @@ public class KomentoFeatureProviderTests
 
     // ── flag not found ────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_unknown_flag_returns_FlagNotFound()
     {
         var provider = new KomentoFeatureProvider(BuildClient());
@@ -104,7 +104,7 @@ public class KomentoFeatureProviderTests
 
     // ── ineligible ────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_ineligible_subject_returns_default_value()
     {
         var config = new ExperimentConfig
@@ -127,7 +127,7 @@ public class KomentoFeatureProviderTests
 
     // ── outsider ──────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_outsider_returns_default_value()
     {
         var config = new ExperimentConfig
@@ -148,7 +148,7 @@ public class KomentoFeatureProviderTests
 
     // ── bool ──────────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_returns_variant_value_on_match()
     {
         var provider = new KomentoFeatureProvider(BuildClient());
@@ -162,7 +162,7 @@ public class KomentoFeatureProviderTests
         result.ErrorType.Should().Be(ErrorType.None);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveBooleanValue_parse_error_when_value_is_not_bool()
     {
         var config = new ExperimentConfig
@@ -183,7 +183,7 @@ public class KomentoFeatureProviderTests
 
     // ── string ────────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveStringValue_returns_variant_value_on_match()
     {
         var config = new ExperimentConfig
@@ -201,7 +201,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.TargetingMatch);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveStringValue_parse_error_when_value_is_not_string()
     {
         var config = new ExperimentConfig
@@ -221,7 +221,7 @@ public class KomentoFeatureProviderTests
 
     // ── int ───────────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveIntegerValue_returns_variant_value_on_match()
     {
         var config = new ExperimentConfig
@@ -239,7 +239,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.TargetingMatch);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveIntegerValue_parse_error_when_value_is_not_int()
     {
         var config = new ExperimentConfig
@@ -259,7 +259,7 @@ public class KomentoFeatureProviderTests
 
     // ── double ────────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveDoubleValue_returns_variant_value_on_match()
     {
         var config = new ExperimentConfig
@@ -277,7 +277,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.TargetingMatch);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveDoubleValue_parse_error_when_value_is_not_double()
     {
         var config = new ExperimentConfig
@@ -297,7 +297,7 @@ public class KomentoFeatureProviderTests
 
     // ── structure: primitives ─────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveStructureValue_bool_wraps_in_Value()
     {
         var config = new ExperimentConfig
@@ -316,7 +316,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.TargetingMatch);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveStructureValue_string_wraps_in_Value()
     {
         var config = new ExperimentConfig
@@ -334,7 +334,7 @@ public class KomentoFeatureProviderTests
         result.Value.AsString.Should().Be("hello");
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveStructureValue_int_wraps_in_Value()
     {
         var config = new ExperimentConfig
@@ -354,7 +354,7 @@ public class KomentoFeatureProviderTests
 
     // ── structure: complex object via JSON ────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveStructureValue_complex_object_serializes_via_json()
     {
         var payload = new { Color = "red", Count = 3 };
@@ -378,7 +378,7 @@ public class KomentoFeatureProviderTests
 
     // ── structure: parse error for non-serializable ───────────────────────────
 
-    [Fact]
+    [Test]
     public async Task ResolveStructureValue_non_serializable_returns_ParseError()
     {
         var config = new ExperimentConfig
@@ -396,7 +396,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.Error);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveStructureValue_null_variant_returns_ParseError()
     {
         var config = new ExperimentConfig
@@ -414,7 +414,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.Error);
     }
 
-    [Fact]
+    [Test]
     public async Task ResolveStructureValue_array_serializes_via_json()
     {
         object[] payload = ["hello", false, 2];
@@ -438,7 +438,7 @@ public class KomentoFeatureProviderTests
 
     // ── context attribute forwarding ──────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task Context_attributes_forwarded_to_Komento_EvaluationContext()
     {
         var config = new ExperimentConfig
@@ -461,7 +461,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.TargetingMatch);
     }
 
-    [Fact]
+    [Test]
     public async Task Context_attribute_role_missing_causes_ineligible()
     {
         var config = new ExperimentConfig
@@ -483,7 +483,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.Default);
     }
 
-    [Fact]
+    [Test]
     public async Task SubjectType_attribute_is_forwarded_as_context_attribute()
     {
         var config = new ExperimentConfig
@@ -506,7 +506,7 @@ public class KomentoFeatureProviderTests
         result.Reason.Should().Be(Reason.TargetingMatch);
     }
 
-    [Fact]
+    [Test]
     public async Task Boolean_and_number_context_attributes_are_forwarded()
     {
         var client = new CapturingExperimentClient(new VariantResult

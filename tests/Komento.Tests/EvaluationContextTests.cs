@@ -1,19 +1,19 @@
 using AwesomeAssertions;
 using Komento;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.Tests;
 
 public class EvaluationContextTests
 {
-    [Fact]
+    [Test]
     public void Empty_context_returns_false_for_any_key()
     {
         var ctx = EvaluationContext.Empty;
         ctx.TryGetValue("any", out _).Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void Builder_sets_and_retrieves_value()
     {
         var ctx = EvaluationContext.Create()
@@ -27,7 +27,7 @@ public class EvaluationContextTests
         platform.Should().Be("android");
     }
 
-    [Fact]
+    [Test]
     public void Builder_later_set_wins_for_same_key()
     {
         var ctx = EvaluationContext.Create()
@@ -39,7 +39,7 @@ public class EvaluationContextTests
         value.Should().Be("second");
     }
 
-    [Fact]
+    [Test]
     public void CreateFrom_copies_existing_context_attributes()
     {
         var baseCtx = EvaluationContext.Create().Set("region", "EU").Build();
@@ -51,7 +51,7 @@ public class EvaluationContextTests
         locale.Should().Be("en-GB");
     }
 
-    [Fact]
+    [Test]
     public void CreateFrom_empty_context_produces_empty_builder()
     {
         var ctx = EvaluationContextBuilder.CreateFrom(in EvaluationContext.Empty).Build();

@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Komento;
 using Komento.Internals;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.Tests;
 
@@ -29,7 +29,7 @@ public class ExperimentClientTests
         return client;
     }
 
-    [Fact]
+    [Test]
     public async Task Unknown_experiment_returns_NotFound()
     {
         var client = BuildClient();
@@ -37,7 +37,7 @@ public class ExperimentClientTests
         result.Should().Be(VariantResult.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Same_subject_always_gets_same_variant()
     {
         var client = BuildClient();
@@ -46,7 +46,7 @@ public class ExperimentClientTests
         r1.VariantName.Should().Be(r2.VariantName);
     }
 
-    [Fact]
+    [Test]
     public async Task SubjectOverride_forces_variant_regardless_of_hash()
     {
         var config = new ExperimentConfig
@@ -61,7 +61,7 @@ public class ExperimentClientTests
         (result == "treatment").Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task TraitEqualsFilter_excludes_non_matching_subject()
     {
         var config = new ExperimentConfig
@@ -77,7 +77,7 @@ public class ExperimentClientTests
         result.Should().Be(VariantResult.Ineligible);
     }
 
-    [Fact]
+    [Test]
     public async Task TraitEqualsFilter_allows_matching_subject()
     {
         var config = new ExperimentConfig
@@ -93,7 +93,7 @@ public class ExperimentClientTests
         result.IsEligible.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task SegmentOverride_forces_variant_for_segment_member()
     {
         var segmentProvider = new InMemorySegmentProvider(
@@ -111,7 +111,7 @@ public class ExperimentClientTests
         (result == "treatment").Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task SegmentIncludeFilter_excludes_non_member()
     {
         var segmentProvider = new InMemorySegmentProvider(
@@ -129,7 +129,7 @@ public class ExperimentClientTests
         result.Should().Be(VariantResult.Ineligible);
     }
 
-    [Fact]
+    [Test]
     public async Task Subject_not_in_any_bucket_is_outsider()
     {
         var config = new ExperimentConfig
@@ -144,7 +144,7 @@ public class ExperimentClientTests
         (result == "control").Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task Exposure_event_is_written_to_channel()
     {
         var client = BuildClient();
@@ -155,7 +155,7 @@ public class ExperimentClientTests
         exposure.SubjectId.Should().Be("user-42");
     }
 
-    [Fact]
+    [Test]
     public async Task GetBoolAsync_returns_default_when_experiment_not_found()
     {
         var client = BuildClient();
@@ -163,14 +163,14 @@ public class ExperimentClientTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task RelevantExperimentIds_reflects_loaded_experiments()
     {
         var client = BuildClient();
         client.RelevantExperimentIds.Should().Contain("exp-1");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAsync_single_experiment_replaces_it()
     {
         var client    = BuildClient();
@@ -185,7 +185,7 @@ public class ExperimentClientTests
         (result == "new-variant").Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task RemoveAsync_removes_experiment()
     {
         var client = BuildClient();
@@ -196,7 +196,7 @@ public class ExperimentClientTests
 
     // ── Typed helpers ─────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task GetBoolAsync_returns_typed_value_from_variant()
     {
         var config = new ExperimentConfig
@@ -210,7 +210,7 @@ public class ExperimentClientTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task GetBoolAsync_returns_default_when_ineligible()
     {
         var config = new ExperimentConfig
@@ -224,7 +224,7 @@ public class ExperimentClientTests
         (await client.GetBoolAsync("bool-filtered", "user-1", EvaluationContext.Empty, defaultValue: false)).Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task GetBoolAsync_returns_default_when_value_is_wrong_type()
     {
         var config = new ExperimentConfig
@@ -237,7 +237,7 @@ public class ExperimentClientTests
         (await client.GetBoolAsync("bool-wrong-type", "user-1", EvaluationContext.Empty, defaultValue: true)).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task GetStringAsync_returns_typed_value_from_variant()
     {
         var config = new ExperimentConfig
@@ -250,7 +250,7 @@ public class ExperimentClientTests
         (await client.GetStringAsync("str-flag", "user-1", EvaluationContext.Empty)).Should().Be("hello");
     }
 
-    [Fact]
+    [Test]
     public async Task GetStringAsync_returns_default_when_ineligible()
     {
         var config = new ExperimentConfig
@@ -264,7 +264,7 @@ public class ExperimentClientTests
         (await client.GetStringAsync("str-filtered", "user-1", EvaluationContext.Empty, defaultValue: "fallback")).Should().Be("fallback");
     }
 
-    [Fact]
+    [Test]
     public async Task GetStringAsync_returns_default_when_value_is_wrong_type()
     {
         var config = new ExperimentConfig
@@ -277,7 +277,7 @@ public class ExperimentClientTests
         (await client.GetStringAsync("str-wrong-type", "user-1", EvaluationContext.Empty, defaultValue: "fallback")).Should().Be("fallback");
     }
 
-    [Fact]
+    [Test]
     public async Task GetIntAsync_returns_typed_value_from_variant()
     {
         var config = new ExperimentConfig
@@ -290,7 +290,7 @@ public class ExperimentClientTests
         (await client.GetIntAsync("int-flag", "user-1", EvaluationContext.Empty)).Should().Be(42);
     }
 
-    [Fact]
+    [Test]
     public async Task GetIntAsync_returns_default_when_ineligible()
     {
         var config = new ExperimentConfig
@@ -304,7 +304,7 @@ public class ExperimentClientTests
         (await client.GetIntAsync("int-filtered", "user-1", EvaluationContext.Empty, defaultValue: -1)).Should().Be(-1);
     }
 
-    [Fact]
+    [Test]
     public async Task GetDoubleAsync_returns_typed_value_from_variant()
     {
         var config = new ExperimentConfig
@@ -317,7 +317,7 @@ public class ExperimentClientTests
         (await client.GetDoubleAsync("dbl-flag", "user-1", EvaluationContext.Empty)).Should().Be(3.14);
     }
 
-    [Fact]
+    [Test]
     public async Task GetDoubleAsync_returns_default_when_ineligible()
     {
         var config = new ExperimentConfig
@@ -343,7 +343,7 @@ public class ExperimentClientTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task GetBoolAsync_async_path_returns_value()
     {
         var config = new ExperimentConfig
@@ -357,7 +357,7 @@ public class ExperimentClientTests
         (await client.GetBoolAsync("async-bool", "user-1", EvaluationContext.Empty)).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task GetBoolAsync_async_path_returns_default_when_ineligible()
     {
         var config = new ExperimentConfig
@@ -371,7 +371,7 @@ public class ExperimentClientTests
         (await client.GetBoolAsync("async-bool-out", "user-1", EvaluationContext.Empty, defaultValue: false)).Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task GetStringAsync_async_path_returns_value()
     {
         var config = new ExperimentConfig
@@ -385,7 +385,7 @@ public class ExperimentClientTests
         (await client.GetStringAsync("async-str", "user-1", EvaluationContext.Empty)).Should().Be("hello");
     }
 
-    [Fact]
+    [Test]
     public async Task GetIntAsync_async_path_returns_value()
     {
         var config = new ExperimentConfig
@@ -399,7 +399,7 @@ public class ExperimentClientTests
         (await client.GetIntAsync("async-int", "user-1", EvaluationContext.Empty)).Should().Be(7);
     }
 
-    [Fact]
+    [Test]
     public async Task GetDoubleAsync_async_path_returns_value()
     {
         var config = new ExperimentConfig
@@ -415,7 +415,7 @@ public class ExperimentClientTests
 
     // ── Edge cases ────────────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public async Task SegmentIncludeFilter_with_no_segment_provider_returns_ineligible()
     {
         var config = new ExperimentConfig
@@ -434,7 +434,7 @@ public class ExperimentClientTests
         result.Should().Be(VariantResult.Ineligible);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAsync_batch_silently_ignores_non_relevant_experiment_ids()
     {
         var client = BuildClient();
@@ -451,7 +451,7 @@ public class ExperimentClientTests
         result.Should().Be(VariantResult.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAsync_single_silently_ignores_non_relevant_experiment_id()
     {
         var client = BuildClient();
@@ -467,7 +467,7 @@ public class ExperimentClientTests
         result.Should().Be(VariantResult.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task SubjectOverride_forces_variant_in_async_evaluation_path()
     {
         // Experiment has both a SegmentIncludeFilter (forces async path) and a SubjectOverride.
@@ -487,21 +487,21 @@ public class ExperimentClientTests
 
     // ── ExperimentExists ──────────────────────────────────────────────────────
 
-    [Fact]
+    [Test]
     public void ExperimentExists_returns_false_for_unknown_experiment()
     {
         var client = BuildClient();
         client.ExperimentExists("does-not-exist").Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ExperimentExists_returns_true_for_loaded_experiment()
     {
         var client = BuildClient();
         client.ExperimentExists("exp-1").Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task ExperimentExists_returns_false_after_removal()
     {
         var client = BuildClient();

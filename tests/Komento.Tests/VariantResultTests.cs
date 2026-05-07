@@ -1,12 +1,12 @@
 using AwesomeAssertions;
 using Komento;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.Tests;
 
 public class VariantResultTests
 {
-    [Fact]
+    [Test]
     public void Equality_operator_matches_variant_name()
     {
         var result = new VariantResult { VariantName = "treatment", IsEligible = true };
@@ -15,7 +15,7 @@ public class VariantResultTests
         (result != "control").Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void NotFound_has_control_name_and_is_not_eligible()
     {
         var r = VariantResult.NotFound;
@@ -24,7 +24,7 @@ public class VariantResultTests
         r.IsOutsider.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void Ineligible_has_control_name_and_is_not_eligible()
     {
         var r = VariantResult.Ineligible;
@@ -33,7 +33,7 @@ public class VariantResultTests
         r.IsOutsider.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void Outsider_has_control_name_is_eligible_and_is_outsider()
     {
         var r = VariantResult.Outsider();
@@ -42,14 +42,14 @@ public class VariantResultTests
         r.IsOutsider.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void NotFound_and_Ineligible_are_value_equal_by_design()
     {
         // By design: both result in control behavior; callers do not need to distinguish them.
         VariantResult.NotFound.Should().Be(VariantResult.Ineligible);
     }
 
-    [Fact]
+    [Test]
     public void Equals_returns_true_for_structurally_identical_results()
     {
         var a = new VariantResult { VariantName = "treatment", IsEligible = true, IsOutsider = false };
@@ -57,7 +57,7 @@ public class VariantResultTests
         a.Equals(b).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Equals_returns_false_for_different_variant_name()
     {
         var a = new VariantResult { VariantName = "treatment", IsEligible = true };
@@ -65,7 +65,7 @@ public class VariantResultTests
         a.Equals(b).Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void Equals_object_returns_false_for_non_VariantResult_type()
     {
         var r = new VariantResult { VariantName = "treatment", IsEligible = true };
@@ -73,7 +73,7 @@ public class VariantResultTests
         r.Equals(null).Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void GetHashCode_is_equal_for_structurally_identical_results()
     {
         var a = new VariantResult { VariantName = "treatment", IsEligible = true, IsOutsider = false };
@@ -81,7 +81,7 @@ public class VariantResultTests
         a.GetHashCode().Should().Be(b.GetHashCode());
     }
 
-    [Fact]
+    [Test]
     public void GetHashCode_differs_for_different_results()
     {
         var a = new VariantResult { VariantName = "treatment", IsEligible = true };

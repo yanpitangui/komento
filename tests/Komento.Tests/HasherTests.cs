@@ -1,12 +1,12 @@
 using AwesomeAssertions;
 using Komento.Internals;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.Tests;
 
 public class HasherTests
 {
-    [Fact]
+    [Test]
     public void Same_inputs_always_produce_same_bucket()
     {
         var b1 = Hasher.ComputeBucket("exp-123", "user-42");
@@ -14,7 +14,7 @@ public class HasherTests
         b1.Should().Be(b2);
     }
 
-    [Fact]
+    [Test]
     public void Bucket_is_within_valid_range()
     {
         for (var i = 0; i < 100; i++)
@@ -24,7 +24,7 @@ public class HasherTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Different_experiments_produce_different_buckets_for_same_subject()
     {
         var buckets = Enumerable.Range(0, 10)
@@ -33,7 +33,7 @@ public class HasherTests
         (buckets.Count > 1).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Distribution_is_roughly_uniform_over_large_population()
     {
         const int subjects = 10_000;

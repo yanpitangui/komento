@@ -1,13 +1,13 @@
 using AwesomeAssertions;
 using Komento;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.Tests;
 
 public class DependencyInjectionTests
 {
-    [Fact]
+    [Test]
     public void AddKomento_registers_IExperimentClient()
     {
         var services = new ServiceCollection();
@@ -17,7 +17,7 @@ public class DependencyInjectionTests
         provider.GetService<IExperimentClient>().Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void AddKomento_registers_IConfigUpdater()
     {
         var services = new ServiceCollection();
@@ -27,7 +27,7 @@ public class DependencyInjectionTests
         provider.GetService<IConfigUpdater>().Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void IExperimentClient_and_IConfigUpdater_are_same_instance()
     {
         var services = new ServiceCollection();
@@ -40,7 +40,7 @@ public class DependencyInjectionTests
         updater.Should().BeSameAs(client);
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeKomentoAsync_loads_configs_from_source()
     {
         var services = new ServiceCollection();
@@ -56,7 +56,7 @@ public class DependencyInjectionTests
         result.VariantName.Should().Be("control");
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeKomentoAsync_is_noop_when_no_source_registered()
     {
         var services = new ServiceCollection();

@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using Komento;
 using Komento.Internals;
-using Xunit;
+using TUnit.Core;
 
 namespace Komento.Tests;
 
@@ -15,7 +15,7 @@ public class ConfigCompilerTests
             Variants    = variants.Select(v => new VariantConfig { Name = v.name, Allocation = v.allocation, Value = v.value }).ToList()
         };
 
-    [Fact]
+    [Test]
     public void Fifty_fifty_split_produces_correct_ranges()
     {
         var config   = MakeConfig(("control", 0.5, null), ("treatment", 0.5, true));
@@ -31,7 +31,7 @@ public class ConfigCompilerTests
         compiled.Variants[1].Value.Should().Be(true);
     }
 
-    [Fact]
+    [Test]
     public void Three_way_equal_split_fills_all_buckets()
     {
         var config   = MakeConfig(("a", 0.34, null), ("b", 0.33, null), ("c", 0.33, null));
@@ -42,7 +42,7 @@ public class ConfigCompilerTests
         compiled.Variants[^1].Ranges[^1].End.Should().Be(1000);
     }
 
-    [Fact]
+    [Test]
     public void Single_variant_full_allocation_covers_all_buckets()
     {
         var config   = MakeConfig(("control", 1.0, null));
@@ -53,7 +53,7 @@ public class ConfigCompilerTests
         compiled.Variants[0].Ranges[0].End.Should().Be(1000);
     }
 
-    [Fact]
+    [Test]
     public void Partial_allocation_leaves_uncovered_buckets()
     {
         var config   = MakeConfig(("control", 0.5, null));
@@ -64,7 +64,7 @@ public class ConfigCompilerTests
         compiled.Variants[0].Ranges[0].End.Should().Be(500);
     }
 
-    [Fact]
+    [Test]
     public void Compiled_carries_filters_and_overrides_as_arrays()
     {
         var config = new ExperimentConfig
