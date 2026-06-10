@@ -1,4 +1,1 @@
 service_name: github-actions
-coverage:
-  paths:
-    - src/**/*
