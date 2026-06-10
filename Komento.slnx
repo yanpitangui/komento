@@ -3,12 +3,14 @@
     <Project Path="src/Komento/Komento.csproj" />
     <Project Path="src/Komento.AspNetCore/Komento.AspNetCore.csproj" />
     <Project Path="src/Komento.OpenFeature/Komento.OpenFeature.csproj" />
+    <Project Path="src/Komento.Generators/Komento.Generators.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Komento.Tests/Komento.Tests.csproj" />
     <Project Path="tests/Komento.AspNetCore.Tests/Komento.AspNetCore.Tests.csproj" />
     <Project Path="tests/Komento.OpenFeature.Tests/Komento.OpenFeature.Tests.csproj" />
     <Project Path="tests/Komento.Sample.Tests/Komento.Sample.Tests.csproj" />
+    <Project Path="tests/Komento.Generators.Tests/Komento.Generators.Tests.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Komento.Benchmarks/Komento.Benchmarks.csproj" />
