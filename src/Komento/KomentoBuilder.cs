@@ -14,6 +14,12 @@ public sealed class KomentoBuilder
         return this;
     }
 
+    public KomentoBuilder AddSource(IExperimentSource instance)
+    {
+        Services.AddSingleton<IExperimentSource>(instance);
+        return this;
+    }
+
     public KomentoBuilder AddSegmentProvider<TProvider>() where TProvider : class, ISegmentProvider
     {
         Services.AddSingleton<ISegmentProvider, TProvider>();
