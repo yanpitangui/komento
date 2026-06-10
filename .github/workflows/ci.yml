@@ -34,6 +34,7 @@ jobs:
       - name: Test
         run: >
           dotnet-coverage collect -f cobertura -o coverage.xml
+          --include "[Komento*]*"
           -- dotnet test --solution Komento.slnx --no-build -c Release
           --report-trx
 
