@@ -103,6 +103,17 @@ public class AppSettingsExperimentSourceTests
     }
 
     [Test]
+    public async Task Empty_set_loads_all_experiments()
+    {
+        var source = new AppSettingsExperimentSource(BuildConfig(SampleJson));
+        var result = await source.LoadAsync(new HashSet<string>());
+
+        result.Count.Should().Be(2);
+        result.ContainsKey("checkout-flow").Should().BeTrue();
+        result.ContainsKey("dark-mode").Should().BeTrue();
+    }
+
+    [Test]
     public async Task Custom_section_path_is_respected()
     {
         var json = """
