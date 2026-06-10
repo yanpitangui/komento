@@ -12,9 +12,15 @@
     <PackageReference Include="OpenFeature" />
   </ItemGroup>
   <ItemGroup>
+    <AdditionalFiles Include="komento.json" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../../src/Komento/Komento.csproj" />
     <ProjectReference Include="../../src/Komento.AspNetCore/Komento.AspNetCore.csproj" />
     <ProjectReference Include="../../src/Komento.OpenFeature/Komento.OpenFeature.csproj" />
+    <ProjectReference Include="../../src/Komento.Generators/Komento.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
     <ProjectReference Include="../Komento.Sample.ServiceDefaults/Komento.Sample.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>
