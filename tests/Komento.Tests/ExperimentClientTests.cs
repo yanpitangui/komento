@@ -22,10 +22,9 @@ public class ExperimentClientTests
         ExperimentConfig? config          = null,
         ISegmentProvider? segmentProvider = null)
     {
-        var cfg     = config ?? FiftyFifty();
-        var options = new KomentoOptions { Experiments = new HashSet<string> { cfg.Id } };
-        var client  = new ExperimentClient(options, segmentProvider);
-        client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [cfg.Id] = cfg }).AsTask().Wait();
+        var cfg    = config ?? FiftyFifty();
+        var client = new ExperimentClient(new KomentoOptions(), segmentProvider);
+        client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [cfg.Id] = cfg }, new HashSet<string>()).AsTask().Wait();
         return client;
     }
 
@@ -161,13 +160,6 @@ public class ExperimentClientTests
         var client = BuildClient();
         var result = await client.GetBoolAsync("missing", "user-1", EvaluationContext.Empty, defaultValue: true);
         result.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task RelevantExperimentIds_reflects_loaded_experiments()
-    {
-        var client = BuildClient();
-        client.RelevantExperimentIds.Should().Contain("exp-1");
     }
 
     [Test]
@@ -426,45 +418,48 @@ public class ExperimentClientTests
             GlobalFilters = [new SegmentIncludeFilter { Segment = "beta" }]
         };
         // No segment provider registered — client built without one.
-        var options = new KomentoOptions { Experiments = new HashSet<string> { config.Id } };
-        var client  = new ExperimentClient(options, segmentProvider: null);
-        await client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [config.Id] = config });
+        var client = new ExperimentClient(new KomentoOptions(), segmentProvider: null);
+        await client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [config.Id] = config }, new HashSet<string>());
 
         var result = await client.GetVariantAsync(config.Id, "user-1", EvaluationContext.Empty);
         result.Should().Be(VariantResult.Ineligible);
     }
 
     [Test]
-    public async Task UpdateAsync_batch_silently_ignores_non_relevant_experiment_ids()
+    public async Task UpdateAsync_batch_with_ids_filters_to_those_ids()
     {
         var client = BuildClient();
-        // "other-exp" is not in the relevant set — should be silently dropped.
-        var irrelevant = new ExperimentConfig
+        var other  = new ExperimentConfig
         {
             Id          = "other-exp",
             SubjectType = "user",
             Variants    = [new VariantConfig { Name = "x", Allocation = 1.0 }]
         };
-        await client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [irrelevant.Id] = irrelevant });
+        // Pass only "exp-1" — "other-exp" should be dropped.
+        await client.UpdateAsync(
+            new Dictionary<string, ExperimentConfig> { [other.Id] = other },
+            new HashSet<string> { "exp-1" });
 
         var result = await client.GetVariantAsync("other-exp", "user-1", EvaluationContext.Empty);
         result.Should().Be(VariantResult.NotFound);
     }
 
     [Test]
-    public async Task UpdateAsync_single_silently_ignores_non_relevant_experiment_id()
+    public async Task UpdateAsync_batch_with_empty_ids_accepts_all()
     {
         var client = BuildClient();
-        var irrelevant = new ExperimentConfig
+        var other  = new ExperimentConfig
         {
             Id          = "other-exp",
             SubjectType = "user",
             Variants    = [new VariantConfig { Name = "x", Allocation = 1.0 }]
         };
-        await client.UpdateAsync(irrelevant);
+        await client.UpdateAsync(
+            new Dictionary<string, ExperimentConfig> { [other.Id] = other },
+            new HashSet<string>());
 
         var result = await client.GetVariantAsync("other-exp", "user-1", EvaluationContext.Empty);
-        result.Should().Be(VariantResult.NotFound);
+        result.VariantName.Should().Be("x");
     }
 
     [Test]

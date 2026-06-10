@@ -8,18 +8,15 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater
     private FrozenDictionary<string, CompiledExperiment> _experiments =
         FrozenDictionary<string, CompiledExperiment>.Empty;
 
-    private readonly FrozenSet<string>          _relevantIds;
     private readonly ISegmentProvider?          _segmentProvider;
     private readonly Channel<ExposureEvent>     _exposureChannel;
 
-    public IReadOnlySet<string>       RelevantExperimentIds => _relevantIds;
-    public ChannelReader<ExposureEvent> Exposures           => _exposureChannel.Reader;
+    public ChannelReader<ExposureEvent> Exposures => _exposureChannel.Reader;
 
     public ExperimentClient(KomentoOptions options, ISegmentProvider? segmentProvider = null)
     {
-        _relevantIds      = options.Experiments.ToFrozenSet(StringComparer.Ordinal);
-        _segmentProvider  = segmentProvider;
-        _exposureChannel  = Channel.CreateBounded<ExposureEvent>(new BoundedChannelOptions(options.ExposureChannelCapacity)
+        _segmentProvider = segmentProvider;
+        _exposureChannel = Channel.CreateBounded<ExposureEvent>(new BoundedChannelOptions(options.ExposureChannelCapacity)
         {
             FullMode     = BoundedChannelFullMode.DropWrite,
             SingleWriter = false,
@@ -253,24 +250,25 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater
     // ── IConfigUpdater ────────────────────────────────────────────────────────
 
     public ValueTask UpdateAsync(
-        IReadOnlyDictionary<string, ExperimentConfig> configs, CancellationToken ct = default)
+        IReadOnlyDictionary<string, ExperimentConfig> configs, IReadOnlySet<string> experimentIds, CancellationToken ct = default)
     {
         var current  = Volatile.Read(ref _experiments);
         var compiled = new Dictionary<string, CompiledExperiment>(current, StringComparer.Ordinal);
 
+        var loadAll = experimentIds.Count == 0;
         foreach (var (id, cfg) in configs)
-            if (_relevantIds.Contains(id))
+            if (loadAll || experimentIds.Contains(id))
                 compiled[id] = ConfigCompiler.Compile(cfg);
 
         Volatile.Write(ref _experiments, compiled.ToFrozenDictionary(StringComparer.Ordinal));
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask UpdateAsync(IReadOnlyDictionary<string, ExperimentConfig> configs, CancellationToken ct = default)
+        => UpdateAsync(configs, new HashSet<string>(), ct);
+
     public ValueTask UpdateAsync(ExperimentConfig config, CancellationToken ct = default)
     {
-        if (!_relevantIds.Contains(config.Id))
-            return ValueTask.CompletedTask;
-
         var current  = Volatile.Read(ref _experiments);
         var compiled = new Dictionary<string, CompiledExperiment>(current, StringComparer.Ordinal)
         {

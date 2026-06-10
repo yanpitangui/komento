@@ -51,8 +51,7 @@ public class EnricherTests
             });
             builder.WebHost.UseTestServer();
 
-            var options = new KomentoOptions { Experiments = new HashSet<string> { config.Id } };
-            var engine  = new ExperimentClient(options);
+            var engine = new ExperimentClient(new KomentoOptions());
             await engine.UpdateAsync(new Dictionary<string, ExperimentConfig> { [config.Id] = config });
 
             builder.Services.AddSingleton<IExperimentClient>(engine);

@@ -24,15 +24,7 @@ builder.AddNatsClient("nats");
 builder.AddNpgsqlDataSource("komento-db");
 
 // Komento core
-builder.Services.AddKomento(opts =>
-{
-    opts.Experiments = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "premium-product-page",
-        "price-display",
-        "recommendation-algorithm"
-    };
-})
+builder.Services.AddKomento()
 .AddSource<NatsExperimentSource>()
 .AddSegmentProvider<AppSegmentProvider>();
 

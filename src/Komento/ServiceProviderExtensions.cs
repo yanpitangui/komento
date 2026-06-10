@@ -11,9 +11,8 @@ public static class ServiceProviderExtensions
         if (source is null) return;
 
         var updater = services.GetRequiredService<IConfigUpdater>();
-        var options = services.GetRequiredService<KomentoOptions>();
 
-        var configs = await source.LoadAsync(options.Experiments, ct);
-        await updater.UpdateAsync(configs, ct);
+        var configs = await source.LoadAsync(new HashSet<string>(), ct);
+        await updater.UpdateAsync(configs, new HashSet<string>(), ct);
     }
 }

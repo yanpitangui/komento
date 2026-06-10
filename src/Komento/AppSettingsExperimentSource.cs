@@ -22,8 +22,9 @@ public sealed class AppSettingsExperimentSource : IExperimentSource
                                    .Get<List<ExperimentConfigDto>>() ?? [];
         var result = new Dictionary<string, ExperimentConfig>(StringComparer.Ordinal);
 
+        var loadAll = experimentIds.Count == 0;
         foreach (var dto in dtos)
-            if (!string.IsNullOrEmpty(dto.Id) && experimentIds.Contains(dto.Id))
+            if (!string.IsNullOrEmpty(dto.Id) && (loadAll || experimentIds.Contains(dto.Id)))
                 result[dto.Id] = ToConfig(dto);
 
         return ValueTask.FromResult<IReadOnlyDictionary<string, ExperimentConfig>>(result);

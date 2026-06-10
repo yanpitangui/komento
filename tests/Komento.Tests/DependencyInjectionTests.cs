@@ -11,7 +11,7 @@ public class DependencyInjectionTests
     public void AddKomento_registers_IExperimentClient()
     {
         var services = new ServiceCollection();
-        services.AddKomento(o => o.Experiments = new HashSet<string> { "exp-1" });
+        services.AddKomento();
 
         var provider = services.BuildServiceProvider();
         provider.GetService<IExperimentClient>().Should().NotBeNull();
@@ -21,7 +21,7 @@ public class DependencyInjectionTests
     public void AddKomento_registers_IConfigUpdater()
     {
         var services = new ServiceCollection();
-        services.AddKomento(o => o.Experiments = new HashSet<string> { "exp-1" });
+        services.AddKomento();
 
         var provider = services.BuildServiceProvider();
         provider.GetService<IConfigUpdater>().Should().NotBeNull();
@@ -31,7 +31,7 @@ public class DependencyInjectionTests
     public void IExperimentClient_and_IConfigUpdater_are_same_instance()
     {
         var services = new ServiceCollection();
-        services.AddKomento(o => o.Experiments = new HashSet<string> { "exp-1" });
+        services.AddKomento();
 
         var provider = services.BuildServiceProvider();
         var client   = provider.GetRequiredService<IExperimentClient>();
@@ -44,7 +44,7 @@ public class DependencyInjectionTests
     public async Task InitializeKomentoAsync_loads_configs_from_source()
     {
         var services = new ServiceCollection();
-        services.AddKomento(o => o.Experiments = new HashSet<string> { "exp-1" })
+        services.AddKomento()
                 .AddSource<StubExperimentSource>();
 
         var provider = services.BuildServiceProvider();
@@ -60,10 +60,9 @@ public class DependencyInjectionTests
     public async Task InitializeKomentoAsync_is_noop_when_no_source_registered()
     {
         var services = new ServiceCollection();
-        services.AddKomento(o => o.Experiments = new HashSet<string> { "exp-1" });
+        services.AddKomento();
 
         var provider = services.BuildServiceProvider();
-        // should not throw
         await provider.InitializeKomentoAsync();
 
         var client = provider.GetRequiredService<IExperimentClient>();
@@ -76,15 +75,16 @@ public class DependencyInjectionTests
         public ValueTask<IReadOnlyDictionary<string, ExperimentConfig>> LoadAsync(
             IReadOnlySet<string> experimentIds, CancellationToken ct = default)
         {
-            var configs = new Dictionary<string, ExperimentConfig>(StringComparer.Ordinal);
-            foreach (var id in experimentIds)
-                configs[id] = new ExperimentConfig
+            IReadOnlyDictionary<string, ExperimentConfig> configs = new Dictionary<string, ExperimentConfig>(StringComparer.Ordinal)
+            {
+                ["exp-1"] = new ExperimentConfig
                 {
-                    Id          = id,
+                    Id          = "exp-1",
                     SubjectType = "user",
                     Variants    = [new VariantConfig { Name = "control", Allocation = 1.0 }]
-                };
-            return ValueTask.FromResult<IReadOnlyDictionary<string, ExperimentConfig>>(configs);
+                }
+            };
+            return ValueTask.FromResult(configs);
         }
     }
 }
