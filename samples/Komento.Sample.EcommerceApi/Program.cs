@@ -114,8 +114,8 @@ app.MapGet("/products/{id}", async (
         await e.EnrichAsync(httpContext, ctxBuilder, ct);
     var ctx = ctxBuilder.Build();
 
-    var isPremium    = await client.GetBoolAsync  ("premium-product-page",      subjectId ?? "", ctx, defaultValue: false,     ct: ct);
-    var priceVariant = await client.GetStringAsync("price-display",             subjectId ?? "", ctx, defaultValue: "default", ct: ct);
+    var isPremium    = await client.GetBoolAsync  (KomentoExperiments.PremiumProductPage.Id,      subjectId ?? "", ctx, defaultValue: false,     ct: ct);
+    var priceVariant = await client.GetStringAsync(KomentoExperiments.PriceDisplay.Id,             subjectId ?? "", ctx, defaultValue: "default", ct: ct);
 
     return Results.Ok(new
     {
@@ -147,7 +147,7 @@ app.MapGet("/recommendations", async (
         .Set("plan", new Value(plan))
         .Build();
 
-    var algo = await featureClient.GetStringValueAsync("recommendation-algorithm", "collaborative", evalCtx);
+    var algo = await featureClient.GetStringValueAsync(KomentoExperiments.RecommendationAlgorithm.Id, "collaborative", evalCtx);
 
     return Results.Ok(new
     {
