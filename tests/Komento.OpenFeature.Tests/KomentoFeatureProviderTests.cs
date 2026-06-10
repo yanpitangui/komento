@@ -16,8 +16,7 @@ public class KomentoFeatureProviderTests
     private static IExperimentClient BuildClient(ExperimentConfig? config = null)
     {
         var cfg = config ?? FiftyFifty();
-        var options = new KomentoOptions { Experiments = new HashSet<string> { cfg.Id } };
-        var client = new ExperimentClient(options);
+        var client = new ExperimentClient(new KomentoOptions());
         client.UpdateAsync(new Dictionary<string, ExperimentConfig> { [cfg.Id] = cfg }).AsTask().Wait();
         return client;
     }

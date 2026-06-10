@@ -21,11 +21,7 @@ public class ExperimentClientBenchmarks
     [GlobalSetup]
     public async Task Setup()
     {
-        var options = new KomentoOptions
-        {
-            Experiments = new HashSet<string> { SyncFlag, TraitFlag, SegmentFlag }
-        };
-        _client = new ExperimentClient(options);
+        _client = new ExperimentClient(new KomentoOptions());
 
         var configs = new Dictionary<string, ExperimentConfig>
         {
