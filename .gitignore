@@ -10,3 +10,6 @@ obj/
 *.nupkg
 *.snupkg
 packages/
+
+# BenchmarkDotNet output
+BenchmarkDotNet.Artifacts/

@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IExperimentClient>(sp => sp.GetRequiredService<ExperimentClient>());
         services.AddSingleton<IConfigUpdater>(sp => sp.GetRequiredService<ExperimentClient>());
+        services.AddSingleton<IExposureStream>(sp => sp.GetRequiredService<ExperimentClient>());
 
         return new KomentoBuilder(services);
     }

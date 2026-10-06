@@ -3,25 +3,29 @@ using System.Threading.Channels;
 
 namespace Komento.Internals;
 
-internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater
+internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExposureStream
 {
     private FrozenDictionary<string, CompiledExperiment> _experiments =
         FrozenDictionary<string, CompiledExperiment>.Empty;
 
     private readonly ISegmentProvider?          _segmentProvider;
-    private readonly Channel<ExposureEvent>     _exposureChannel;
+    private readonly Channel<ExposureEvent>?    _exposureChannel;
 
-    public ChannelReader<ExposureEvent> Exposures => _exposureChannel.Reader;
+    public ChannelReader<ExposureEvent> Reader => _exposureChannel?.Reader
+        ?? throw new InvalidOperationException(
+            $"Exposure stream is disabled. Set {nameof(KomentoOptions)}.{nameof(KomentoOptions.EnableExposureStream)} = true.");
 
     public ExperimentClient(KomentoOptions options, ISegmentProvider? segmentProvider = null)
     {
         _segmentProvider = segmentProvider;
-        _exposureChannel = Channel.CreateBounded<ExposureEvent>(new BoundedChannelOptions(options.ExposureChannelCapacity)
-        {
-            FullMode     = BoundedChannelFullMode.DropWrite,
-            SingleWriter = false,
-            SingleReader = false
-        });
+        if (options.EnableExposureStream)
+            _exposureChannel = Channel.CreateBounded<ExposureEvent>(new BoundedChannelOptions(options.ExposureChannelCapacity)
+            {
+                // Wait: TryWrite returns false when the channel is full, so drops can be counted.
+                FullMode     = BoundedChannelFullMode.Wait,
+                SingleWriter = false,
+                SingleReader = false
+            });
     }
 
     // ── IExperimentClient ─────────────────────────────────────────────────────
@@ -315,9 +319,21 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater
         };
     }
 
+    private static string OutcomeOf(VariantResult result)
+        => result.IsOutsider ? "outsider"
+         : result.IsEligible ? "assigned"
+         : "ineligible";
+
     private void FireExposure(string flagKey, string subjectId, VariantResult result)
     {
-        _exposureChannel.Writer.TryWrite(new ExposureEvent
+        KomentoMetrics.Exposures.Add(1,
+            new KeyValuePair<string, object?>("experiment", flagKey),
+            new KeyValuePair<string, object?>("variant", result.VariantName),
+            new KeyValuePair<string, object?>("outcome", OutcomeOf(result)));
+
+        if (_exposureChannel is null) return;
+
+        var written = _exposureChannel.Writer.TryWrite(new ExposureEvent
         {
             FlagKey     = flagKey,
             SubjectId   = subjectId,
@@ -326,5 +342,8 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater
             IsOutsider  = result.IsOutsider,
             Timestamp   = DateTimeOffset.UtcNow
         });
+
+        if (!written)
+            KomentoMetrics.ExposuresDropped.Add(1, new KeyValuePair<string, object?>("experiment", flagKey));
     }
 }
