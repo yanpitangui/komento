@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Batched, isolated exposure sinks for Komento.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="R3" />
+    <ProjectReference Include="..\Komento\Komento.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Komento.Exposure.Tests" />
+  </ItemGroup>
+</Project>

@@ -24,6 +24,7 @@ if (result == "treatment")
 | Komento | Core engine, all interfaces, DI registration | [![NuGet](https://img.shields.io/nuget/v/Komento.svg)](https://www.nuget.org/packages/Komento) |
 | Komento.AspNetCore | ASP.NET Core integration (filters, subject provider, enrichers) | [![NuGet](https://img.shields.io/nuget/v/Komento.AspNetCore.svg)](https://www.nuget.org/packages/Komento.AspNetCore) |
 | Komento.OpenFeature | OpenFeature provider adapter | [![NuGet](https://img.shields.io/nuget/v/Komento.OpenFeature.svg)](https://www.nuget.org/packages/Komento.OpenFeature) |
+| Komento.Exposure | Batched, isolated exposure sinks (R3) | [![NuGet](https://img.shields.io/nuget/v/Komento.Exposure.svg)](https://www.nuget.org/packages/Komento.Exposure) |
 ---
 
 ## Quick start
@@ -112,6 +113,11 @@ string theme = await client.GetStringValueAsync("ui-theme", "default", ctx);
 | `DEFAULT` | Subject is ineligible or an outsider |
 | `TARGETING_MATCH` | Subject was assigned a variant and the value type matched |
 | `PARSE_ERROR` | Variant value existed but could not be converted to the requested OpenFeature type |
+
+
+### 5. Record exposures (optional)
+
+To know who saw which variant, register an exposure sink or export the built-in metrics. See [Exposures and metrics](#exposures-and-metrics).
 
 ---
 
@@ -564,28 +570,150 @@ Attributes set via `KomentoOptions.StaticContext` are merged automatically in `K
 
 ## Exposures and metrics
 
-Every variant evaluation is an *exposure*. Komento surfaces them two ways.
+An *exposure* is recorded every time Komento evaluates an experiment for a subject. Exposures tell you who was assigned which variant, which is the half of an experiment you need to compare outcomes. Komento surfaces them two ways:
 
-**Metrics (always on).** A `System.Diagnostics.Metrics` meter named `Komento` publishes:
+| | Metrics | Exposure sinks |
+|---|---|---|
+| For | Dashboards and alerts: "how many exposures per variant?" | Analysis: "which subject saw which variant, and when?" |
+| Needs | Nothing (always on) | `Komento.Exposure` and `EnableExposureStream` |
+| Contains subject IDs | No | Yes |
+
+Komento does not analyze results. It gives you clean data to send wherever you do (a warehouse, an events pipeline, a product-analytics tool).
+
+### Metrics
+
+A `System.Diagnostics.Metrics` meter named `Komento` is always on:
 
 | Instrument | Tags | Meaning |
 |---|---|---|
 | `komento.exposures` | `experiment`, `variant`, `outcome` (`assigned` / `outsider` / `ineligible`) | Exposures per variant |
 | `komento.exposures.dropped` | `experiment` | Exposures dropped because the exposure stream was full |
+| `komento.exposures.sink.dropped` | `sink`, `reason` (`queue_full` / `write_failed` / `write_timeout`) | Exposures a sink did not receive |
 
-With OpenTelemetry: `.AddMeter("Komento")`. Subject IDs are never used as tags.
-
-**Exposure stream (opt-in).** Enable it to read every `ExposureEvent` (including subject ID) and ship them to a sink of your choice:
+Outsiders and ineligible subjects are reported with `variant="control"`, so filter on `outcome="assigned"` to count exposures to real variants. Subject IDs are never used as tags. To export with OpenTelemetry:
 
 ```csharp
-services.AddKomento(o => o.EnableExposureStream = true);
-
-var stream = provider.GetRequiredService<IExposureStream>();
-await foreach (var e in stream.Reader.ReadAllAsync(ct))
-    // batch and write e somewhere
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(m => m
+        .AddMeter("Komento")
+        .AddPrometheusExporter());   // or AddOtlpExporter(), etc.
 ```
 
-The stream is a bounded channel (`ExposureChannelCapacity`, default 4096). When it is full, new exposures are dropped and counted in `komento.exposures.dropped`; evaluation never blocks. It is disabled by default, so with no consumer nothing is buffered.
+### Sending exposures somewhere
+
+**1. Install the package.**
+
+```
+dotnet add package Komento.Exposure
+```
+
+**2. Write a sink.** A sink receives batches of exposures and sends them to your destination. This one posts them to an HTTP endpoint:
+
+```csharp
+public sealed class HttpExposureSink(IHttpClientFactory httpClientFactory) : IExposureSink
+{
+    public async ValueTask WriteAsync(IReadOnlyList<ExposureEvent> batch, CancellationToken ct)
+    {
+        var http     = httpClientFactory.CreateClient("exposures");
+        var response = await http.PostAsJsonAsync("/v1/exposures", batch, ct);
+        response.EnsureSuccessStatusCode();   // throwing drops this batch (it is logged and counted)
+    }
+}
+```
+
+Rules for sinks:
+- `WriteAsync` is never called concurrently for the same sink, so you don't need locking.
+- Pass `ct` through. It is cancelled when `WriteTimeout` elapses or the host stops.
+- If it throws or times out, that batch is dropped and later batches still arrive. Do any retrying inside the sink.
+- The sink is created once as a singleton from the root service provider, so it can't depend on scoped services.
+
+**3. Register it.** Enable the stream and add the sink wherever you call `AddKomento`:
+
+```csharp
+builder.Services.AddHttpClient("exposures", c => c.BaseAddress = new Uri("https://events.example.com"));
+
+builder.Services
+    .AddKomento(o => o.EnableExposureStream = true)      // required: sinks read this stream
+    .AddExposureSink<HttpExposureSink>(o =>
+    {
+        o.BatchSize     = 200;                            // flush when 200 are buffered...
+        o.FlushInterval = TimeSpan.FromSeconds(5);        // ...or after 5 seconds, whichever is first
+    });
+```
+
+Sinks run in a background service, so your app must run under a .NET generic host (ASP.NET Core and `Host.CreateApplicationBuilder` both do). If you build the container by hand, start the registered `IHostedService`s yourself. If `EnableExposureStream` is not set, the host fails at startup with a message saying so.
+
+**4. Check that it works.** Add the built-in logging sink next to yours and evaluate an experiment. You should see one entry per exposure:
+
+```csharp
+.AddLoggingExposureSink()
+// info: Komento.Exposure.Sink
+//       Exposure checkout-button subject user-42 -> treatment (eligible: True, outsider: False) at 2026-10-06T12:00:00.0000000+00:00
+```
+
+Remove it once your real sink works; it is useful for local development.
+
+You can register as many sinks as you like (`AddExposureSink<A>().AddExposureSink<B>()`, or a delegate: `.AddExposureSink(async (batch, ct) => await ...)`). Each one gets every exposure.
+
+### Sink options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `Name` | type name, or `sink-{index}` | The `sink` tag on metrics and the name in logs |
+| `BatchSize` | 100 | Max exposures per `WriteAsync` call |
+| `FlushInterval` | 5 s | Flush a partial batch after this long |
+| `MaxPendingBatches` | 64 | Batches buffered while the sink is busy |
+| `WriteTimeout` | 30 s | The write's token is cancelled after this; the batch is dropped |
+| `ShutdownFlushTimeout` | 10 s | How long shutdown waits for this sink to flush |
+
+### How sinks behave under load
+
+Evaluation never waits on a sink. Komento writes each exposure to a bounded stream (`ExposureChannelCapacity`, default 4096); if it is full, the exposure is dropped and counted in `komento.exposures.dropped`. Each sink then has its own queue, so a slow or stuck sink only affects itself: when its `MaxPendingBatches` fill, its new batches are dropped and counted in `komento.exposures.sink.dropped`, and the other sinks are unaffected. On shutdown each sink gets `ShutdownFlushTimeout` to write what is pending, then is abandoned. A sink that ignores its cancellation token and blocks forever cannot be killed, so it will fill its queue and then drop; watch the drop counters.
+
+Alert on `komento.exposures.dropped` and `komento.exposures.sink.dropped`. If either is non-zero, the data in your sink is incomplete and any analysis of it is biased.
+
+### The exposure event
+
+```csharp
+public readonly struct ExposureEvent
+{
+    public string?        FlagKey     { get; init; }   // the experiment id
+    public string?        SubjectId   { get; init; }   // who was evaluated
+    public string?        VariantName { get; init; }   // the variant received; "control" for outsiders and ineligible subjects
+    public bool           IsEligible  { get; init; }   // false: excluded by a filter
+    public bool           IsOutsider  { get; init; }   // true: hash fell outside all allocations (sees control behavior)
+    public DateTimeOffset Timestamp   { get; init; }
+}
+```
+
+### Using exposures to measure results
+
+To say whether a variant "won", join exposures with your own conversion data (a purchase, a click, a signup) on the subject:
+
+1. Keep only exposures where `IsEligible && !IsOutsider`. Outsiders and ineligible subjects are not in the experiment.
+2. For each subject and experiment, take the **first** exposure. Komento emits an exposure on every evaluation, so a subject has many; it does not de-duplicate.
+3. Count conversions that happened **after** that first exposure, grouped by `VariantName`, and compare rates between variants.
+
+Things that commonly break the analysis:
+- **The subject ID must match.** Your conversion events must use the same ID you passed to `GetVariantAsync` (with ASP.NET Core, the value your `ISubjectProvider` returns). Anonymous-to-logged-in ID changes break the join.
+- **Evaluate at the point of use.** An evaluation counts as an exposure even if the user never saw the feature. Evaluate where the user would actually see the variant, not at startup.
+- **Dropped exposures bias results.** Check the drop counters before trusting numbers.
+
+Komento does not compute significance for you; use your analytics tool or a stats library on the joined data.
+
+### Reading the stream directly
+
+Skip `Komento.Exposure` if you want your own pipeline (for example to push into Kafka). With `EnableExposureStream = true`, resolve `IExposureStream` and read it:
+
+```csharp
+var stream = provider.GetRequiredService<IExposureStream>();
+await foreach (var exposure in stream.Reader.ReadAllAsync(ct))
+{
+    // write it somewhere
+}
+```
+
+There is a single reader, so run one consumer. The stream is disabled by default; with no consumer nothing is buffered.
 
 ## Performance
 
