@@ -599,6 +599,28 @@ builder.Services.AddOpenTelemetry()
         .AddPrometheusExporter());   // or AddOtlpExporter(), etc.
 ```
 
+### Traces
+
+Each exposure is also recorded as a `feature_flag.evaluation` event on `Activity.Current` (for example the ASP.NET Core request span), following the [OpenTelemetry feature-flag convention](https://opentelemetry.io/docs/specs/semconv/feature-flags/feature-flags-events/). That ties "which variant did this request get" to the rest of the trace, with no extra setup. Nothing is recorded when there is no active trace, or it is not being sampled.
+
+| Tag | Value |
+|---|---|
+| `feature_flag.key` | The experiment id |
+| `feature_flag.result.variant` | The variant received (`control` for outsiders and ineligible subjects) |
+| `feature_flag.result.reason` | `split` for an assigned variant, otherwise `default` |
+| `feature_flag.provider.name` | `Komento` |
+| `feature_flag.context.id` | The subject ID |
+| `komento.outcome` | `assigned`, `outsider` or `ineligible` |
+| `komento.subject_type` | The experiment's subject type |
+
+The subject ID is recorded by default. If your subject IDs are personal data that must not appear in traces (traces are often retained and shared differently from application data), exclude it:
+
+```csharp
+services.AddKomento(o => o.IncludeSubjectIdInActivityEvents = false);
+```
+
+Turn the event off entirely with `EmitActivityEvents = false`.
+
 ### Sending exposures somewhere
 
 **1. Install the package.**
@@ -679,6 +701,7 @@ public readonly struct ExposureEvent
 {
     public string?        FlagKey     { get; init; }   // the experiment id
     public string?        SubjectId   { get; init; }   // who was evaluated
+    public string?        SubjectType { get; init; }   // the kind of ID SubjectId holds, e.g. "user", "device"
     public string?        VariantName { get; init; }   // the variant received; "control" for outsiders and ineligible subjects
     public bool           IsEligible  { get; init; }   // false: excluded by a filter
     public bool           IsOutsider  { get; init; }   // true: hash fell outside all allocations (sees control behavior)
@@ -695,7 +718,7 @@ To say whether a variant "won", join exposures with your own conversion data (a 
 3. Count conversions that happened **after** that first exposure, grouped by `VariantName`, and compare rates between variants.
 
 Things that commonly break the analysis:
-- **The subject ID must match.** Your conversion events must use the same ID you passed to `GetVariantAsync` (with ASP.NET Core, the value your `ISubjectProvider` returns). Anonymous-to-logged-in ID changes break the join.
+- **The subject ID must match.** Your conversion events must use the same ID you passed to `GetVariantAsync` (with ASP.NET Core, the value your `ISubjectProvider` returns). Check `SubjectType` too: only join exposures with conversions keyed on the same kind of ID. Anonymous-to-logged-in ID changes break the join.
 - **Evaluate at the point of use.** An evaluation counts as an exposure even if the user never saw the feature. Evaluate where the user would actually see the variant, not at startup.
 - **Dropped exposures bias results.** Check the drop counters before trusting numbers.
 
