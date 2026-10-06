@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace Komento.Internals;
@@ -9,6 +10,8 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         FrozenDictionary<string, CompiledExperiment>.Empty;
 
     private readonly ISegmentProvider?          _segmentProvider;
+    private readonly bool                       _emitActivityEvents;
+    private readonly bool                       _includeSubjectIdInActivityEvents;
     private readonly Channel<ExposureEvent>?    _exposureChannel;
 
     public ChannelReader<ExposureEvent> Reader => _exposureChannel?.Reader
@@ -17,7 +20,9 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
 
     public ExperimentClient(KomentoOptions options, ISegmentProvider? segmentProvider = null)
     {
-        _segmentProvider = segmentProvider;
+        _segmentProvider                  = segmentProvider;
+        _emitActivityEvents               = options.EmitActivityEvents;
+        _includeSubjectIdInActivityEvents = options.IncludeSubjectIdInActivityEvents;
         if (options.EnableExposureStream)
             _exposureChannel = Channel.CreateBounded<ExposureEvent>(new BoundedChannelOptions(options.ExposureChannelCapacity)
             {
@@ -319,6 +324,25 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         };
     }
 
+    // OpenTelemetry feature-flag convention: https://opentelemetry.io/docs/specs/semconv/feature-flags/feature-flags-events/
+    private void AddActivityEvent(Activity activity, string flagKey, string subjectId, CompiledExperiment exp, VariantResult result)
+    {
+        var outcome = OutcomeOf(result);
+        var tags    = new ActivityTagsCollection
+        {
+            ["feature_flag.key"]            = flagKey,
+            ["feature_flag.result.variant"] = result.VariantName,
+            ["feature_flag.result.reason"]  = outcome == "assigned" ? "split" : "default",
+            ["feature_flag.provider.name"]  = "Komento",
+            ["komento.outcome"]             = outcome,
+            ["komento.subject_type"]        = exp.SubjectType
+        };
+        if (_includeSubjectIdInActivityEvents)
+            tags["feature_flag.context.id"] = subjectId;
+
+        activity.AddEvent(new ActivityEvent("feature_flag.evaluation", tags: tags));
+    }
+
     private static string OutcomeOf(VariantResult result)
         => result.IsOutsider ? "outsider"
          : result.IsEligible ? "assigned"
@@ -330,6 +354,9 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
             new KeyValuePair<string, object?>("experiment", flagKey),
             new KeyValuePair<string, object?>("variant", result.VariantName),
             new KeyValuePair<string, object?>("outcome", OutcomeOf(result)));
+
+        if (_emitActivityEvents && Activity.Current is { IsAllDataRequested: true } activity)
+            AddActivityEvent(activity, flagKey, subjectId, exp, result);
 
         if (_exposureChannel is null) return;
 
