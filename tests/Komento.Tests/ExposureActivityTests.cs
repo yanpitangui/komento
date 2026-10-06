@@ -67,27 +67,27 @@ public class ExposureActivityTests
     }
 
     [Test]
-    public async Task Subject_id_is_not_recorded_by_default()
+    public async Task Subject_id_is_recorded_by_default()
     {
-        using var trace = new Trace();
-        var client         = BuildClient(OneVariant("activity-no-id"));
-
-        using var activity = trace.StartRequest();
-        await client.GetVariantAsync("activity-no-id", "device-1", EvaluationContext.Empty);
-
-        Tags(activity.Events.Single()).Should().NotContainKey("feature_flag.context.id");
-    }
-
-    [Test]
-    public async Task Subject_id_is_recorded_when_opted_in()
-    {
-        using var trace = new Trace();
-        var client         = BuildClient(OneVariant("activity-id"), o => o.IncludeSubjectIdInActivityEvents = true);
+        using var trace    = new Trace();
+        var client         = BuildClient(OneVariant("activity-id"));
 
         using var activity = trace.StartRequest();
         await client.GetVariantAsync("activity-id", "device-1", EvaluationContext.Empty);
 
         Tags(activity.Events.Single())["feature_flag.context.id"].Should().Be("device-1");
+    }
+
+    [Test]
+    public async Task Subject_id_can_be_excluded()
+    {
+        using var trace    = new Trace();
+        var client         = BuildClient(OneVariant("activity-no-id"), o => o.IncludeSubjectIdInActivityEvents = false);
+
+        using var activity = trace.StartRequest();
+        await client.GetVariantAsync("activity-no-id", "device-1", EvaluationContext.Empty);
+
+        Tags(activity.Events.Single()).Should().NotContainKey("feature_flag.context.id");
     }
 
     [Test]
