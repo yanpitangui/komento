@@ -74,4 +74,27 @@ public class ExposureStreamTests
 
         dropped.Should().ContainSingle();
     }
+
+    private static async Task<ExposureEvent> ExposeAsync(ExperimentConfig config)
+    {
+        using var provider = Build(o => o.EnableExposureStream = true);
+        await provider.GetRequiredService<IConfigUpdater>().UpdateAsync(config);
+        await provider.GetRequiredService<IExperimentClient>()
+            .GetVariantAsync(config.Id, "user-1", EvaluationContext.Empty);
+        provider.GetRequiredService<IExposureStream>().Reader.TryRead(out var exposure).Should().BeTrue();
+        return exposure;
+    }
+
+    [Test]
+    public async Task Exposure_carries_the_experiments_subject_type()
+    {
+        var exposure = await ExposeAsync(new ExperimentConfig
+        {
+            Id          = "subject-type-exp",
+            SubjectType = "device",
+            Variants    = [new VariantConfig { Name = "only", Allocation = 1.0 }]
+        });
+
+        exposure.SubjectType.Should().Be("device");
+    }
 }
