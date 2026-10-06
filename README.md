@@ -562,6 +562,31 @@ Attributes set via `KomentoOptions.StaticContext` are merged automatically in `K
 
 ---
 
+## Exposures and metrics
+
+Every variant evaluation is an *exposure*. Komento surfaces them two ways.
+
+**Metrics (always on).** A `System.Diagnostics.Metrics` meter named `Komento` publishes:
+
+| Instrument | Tags | Meaning |
+|---|---|---|
+| `komento.exposures` | `experiment`, `variant`, `outcome` (`assigned` / `outsider` / `ineligible`) | Exposures per variant |
+| `komento.exposures.dropped` | `experiment` | Exposures dropped because the exposure stream was full |
+
+With OpenTelemetry: `.AddMeter("Komento")`. Subject IDs are never used as tags.
+
+**Exposure stream (opt-in).** Enable it to read every `ExposureEvent` (including subject ID) and ship them to a sink of your choice:
+
+```csharp
+services.AddKomento(o => o.EnableExposureStream = true);
+
+var stream = provider.GetRequiredService<IExposureStream>();
+await foreach (var e in stream.Reader.ReadAllAsync(ct))
+    // batch and write e somewhere
+```
+
+The stream is a bounded channel (`ExposureChannelCapacity`, default 4096). When it is full, new exposures are dropped and counted in `komento.exposures.dropped`; evaluation never blocks. It is disabled by default, so with no consumer nothing is buffered.
+
 ## Performance
 
 All read operations — variant lookup, filter evaluation, segment membership — are allocation-free on the hot path. BenchmarkDotNet (`MemoryDiagnoser`) shows **0 bytes allocated** per `GetVariantAsync` call across all paths including the async segment filter path.

@@ -146,10 +146,11 @@ public class ExperimentClientTests
     [Test]
     public async Task Exposure_event_is_written_to_channel()
     {
-        var client = BuildClient();
+        var client = new ExperimentClient(new KomentoOptions { EnableExposureStream = true });
+        await client.UpdateAsync(FiftyFifty());
         await client.GetVariantAsync("exp-1", "user-42", EvaluationContext.Empty);
 
-        client.Exposures.TryRead(out var exposure).Should().BeTrue();
+        client.Reader.TryRead(out var exposure).Should().BeTrue();
         exposure.FlagKey.Should().Be("exp-1");
         exposure.SubjectId.Should().Be("user-42");
     }

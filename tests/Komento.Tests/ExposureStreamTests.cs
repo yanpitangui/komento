@@ -1,0 +1,77 @@
+using System.Diagnostics.Metrics;
+using AwesomeAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using TUnit.Core;
+
+namespace Komento.Tests;
+
+public class ExposureStreamTests
+{
+    private static ExperimentConfig OneVariant(string id) => new()
+    {
+        Id          = id,
+        SubjectType = "user",
+        Variants    = [new VariantConfig { Name = "only", Allocation = 1.0 }]
+    };
+
+    private static ServiceProvider Build(Action<KomentoOptions>? configure = null)
+    {
+        var services = new ServiceCollection();
+        services.AddKomento(configure);
+        return services.BuildServiceProvider();
+    }
+
+    [Test]
+    public async Task Enabled_stream_delivers_exposures_to_consumers()
+    {
+        using var provider = Build(o => o.EnableExposureStream = true);
+        await provider.GetRequiredService<IConfigUpdater>().UpdateAsync(OneVariant("stream-exp"));
+
+        await provider.GetRequiredService<IExperimentClient>()
+            .GetVariantAsync("stream-exp", "user-1", EvaluationContext.Empty);
+
+        var stream = provider.GetRequiredService<IExposureStream>();
+        stream.Reader.TryRead(out var exposure).Should().BeTrue();
+        exposure.FlagKey.Should().Be("stream-exp");
+        exposure.SubjectId.Should().Be("user-1");
+    }
+
+    [Test]
+    public void Reader_throws_when_stream_is_disabled()
+    {
+        using var provider = Build();
+
+        var act = () => provider.GetRequiredService<IExposureStream>().Reader;
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*EnableExposureStream*");
+    }
+
+    [Test]
+    public async Task Exposure_dropped_when_channel_full_increments_dropped_counter()
+    {
+        var dropped = new List<IReadOnlyDictionary<string, object?>>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == "Komento" && instrument.Name == "komento.exposures.dropped")
+                l.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var dict = new Dictionary<string, object?>();
+            foreach (var tag in tags) dict[tag.Key] = tag.Value;
+            if ((string?)dict["experiment"] == "drop-exp")
+                lock (dropped) dropped.Add(dict);
+        });
+        listener.Start();
+
+        using var provider = Build(o => { o.EnableExposureStream = true; o.ExposureChannelCapacity = 1; });
+        await provider.GetRequiredService<IConfigUpdater>().UpdateAsync(OneVariant("drop-exp"));
+        var client = provider.GetRequiredService<IExperimentClient>();
+
+        await client.GetVariantAsync("drop-exp", "user-1", EvaluationContext.Empty); // fills channel
+        await client.GetVariantAsync("drop-exp", "user-2", EvaluationContext.Empty); // dropped
+
+        dropped.Should().ContainSingle();
+    }
+}
