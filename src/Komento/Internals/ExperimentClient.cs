@@ -142,7 +142,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
                 var r = MakeResult(so.Variant, exp, isEligible: true, isOutsider: false);
-                FireExposure(flagKey, subjectId, r);
+                FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
         }
@@ -155,7 +155,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
                 !(ctx.TryGetValue(tf.Key, out var val) &&
                   string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
             {
-                FireExposure(flagKey, subjectId, VariantResult.Ineligible);
+                FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
                 return VariantResult.Ineligible;
             }
         }
@@ -175,7 +175,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
                 var r = MakeResult(so.Variant, exp, isEligible: true, isOutsider: false);
-                FireExposure(flagKey, subjectId, r);
+                FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
         }
@@ -190,7 +190,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
                     if (!(ctx.TryGetValue(tf.Key, out var val) &&
                           string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
                     {
-                        FireExposure(flagKey, subjectId, VariantResult.Ineligible);
+                        FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
                         return VariantResult.Ineligible;
                     }
                     break;
@@ -199,7 +199,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
                     if (_segmentProvider is null ||
                         !await _segmentProvider.IsInSegmentAsync(subjectId, sf.Segment, ct))
                     {
-                        FireExposure(flagKey, subjectId, VariantResult.Ineligible);
+                        FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
                         return VariantResult.Ineligible;
                     }
                     break;
@@ -214,7 +214,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
                 await _segmentProvider.IsInSegmentAsync(subjectId, segOvr.Segment, ct))
             {
                 var r = MakeResult(segOvr.Variant, exp, isEligible: true, isOutsider: false);
-                FireExposure(flagKey, subjectId, r);
+                FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
         }
@@ -240,14 +240,14 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
                         Value       = variants[i].Value,
                         IsEligible  = true,
                     };
-                    FireExposure(flagKey, subjectId, r);
+                    FireExposure(flagKey, subjectId, exp, r);
                     return r;
                 }
             }
         }
 
         var outsider = VariantResult.Outsider();
-        FireExposure(flagKey, subjectId, outsider);
+        FireExposure(flagKey, subjectId, exp, outsider);
         return outsider;
     }
 
@@ -324,7 +324,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
          : result.IsEligible ? "assigned"
          : "ineligible";
 
-    private void FireExposure(string flagKey, string subjectId, VariantResult result)
+    private void FireExposure(string flagKey, string subjectId, CompiledExperiment exp, VariantResult result)
     {
         KomentoMetrics.Exposures.Add(1,
             new KeyValuePair<string, object?>("experiment", flagKey),
@@ -337,6 +337,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         {
             FlagKey     = flagKey,
             SubjectId   = subjectId,
+            SubjectType = exp.SubjectType,
             VariantName = result.VariantName,
             IsEligible  = result.IsEligible,
             IsOutsider  = result.IsOutsider,
