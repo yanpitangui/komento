@@ -171,7 +171,7 @@ internal sealed class ExperimentClient
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
                 var r = MakeResult(so.Variant, exp, AssignmentSource.SubjectOverride);
-                FireExposure(flagKey, subjectId, exp, r);
+                FireExposure(flagKey, subjectId, exp, r, in ctx);
                 return r;
             }
         }
@@ -185,13 +185,13 @@ internal sealed class ExperimentClient
                   string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
             {
                 var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
-                FireExposure(flagKey, subjectId, exp, ineligible);
+                FireExposure(flagKey, subjectId, exp, ineligible, in ctx);
                 return ineligible;
             }
         }
 
         // 3. Bucket assignment
-        return AssignBucket(flagKey, subjectId, exp);
+        return AssignBucket(flagKey, subjectId, exp, in ctx);
     }
 
     private async ValueTask<VariantResult> EvaluateAsync(
@@ -205,7 +205,7 @@ internal sealed class ExperimentClient
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
                 var r = MakeResult(so.Variant, exp, AssignmentSource.SubjectOverride);
-                FireExposure(flagKey, subjectId, exp, r);
+                FireExposure(flagKey, subjectId, exp, r, in ctx);
                 return r;
             }
         }
@@ -221,7 +221,7 @@ internal sealed class ExperimentClient
                           string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
                     {
                         var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
-                        FireExposure(flagKey, subjectId, exp, ineligible);
+                        FireExposure(flagKey, subjectId, exp, ineligible, in ctx);
                         return ineligible;
                     }
                     break;
@@ -231,7 +231,7 @@ internal sealed class ExperimentClient
                         !await _segmentProvider.IsInSegmentAsync(subjectId, sf.Segment, ct))
                     {
                         var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
-                        FireExposure(flagKey, subjectId, exp, ineligible);
+                        FireExposure(flagKey, subjectId, exp, ineligible, in ctx);
                         return ineligible;
                     }
                     break;
@@ -246,16 +246,16 @@ internal sealed class ExperimentClient
                 await _segmentProvider.IsInSegmentAsync(subjectId, segOvr.Segment, ct))
             {
                 var r = MakeResult(segOvr.Variant, exp, AssignmentSource.SegmentOverride);
-                FireExposure(flagKey, subjectId, exp, r);
+                FireExposure(flagKey, subjectId, exp, r, in ctx);
                 return r;
             }
         }
 
         // 4. Bucket assignment
-        return AssignBucket(flagKey, subjectId, exp);
+        return AssignBucket(flagKey, subjectId, exp, in ctx);
     }
 
-    private VariantResult AssignBucket(string flagKey, string subjectId, CompiledExperiment exp)
+    private VariantResult AssignBucket(string flagKey, string subjectId, CompiledExperiment exp, in EvaluationContext ctx)
     {
         var bucket   = Hasher.ComputeBucket(flagKey, subjectId);
         var variants = exp.Variants;
@@ -274,14 +274,14 @@ internal sealed class ExperimentClient
                         Source      = AssignmentSource.Hash,
                         SubjectType = exp.SubjectType
                     };
-                    FireExposure(flagKey, subjectId, exp, r);
+                    FireExposure(flagKey, subjectId, exp, r, in ctx);
                     return r;
                 }
             }
         }
 
         var outsider = VariantResult.Outsider() with { SubjectType = exp.SubjectType };
-        FireExposure(flagKey, subjectId, exp, outsider);
+        FireExposure(flagKey, subjectId, exp, outsider, in ctx);
         return outsider;
     }
 
@@ -448,7 +448,23 @@ internal sealed class ExperimentClient
          : result.IsEligible ? "assigned"
          : "ineligible";
 
-    private void FireExposure(string flagKey, string subjectId, CompiledExperiment exp, VariantResult result)
+    // The listed keys, from the call's context first and then the static one. Allocates only for experiments
+    // that list keys, and only when an exposure stream is there to receive it.
+    private IReadOnlyDictionary<string, object>? ExposureContextOf(CompiledExperiment exp, in EvaluationContext ctx)
+    {
+        var keys = exp.ExposureContext;
+        if (keys.Length == 0) return null;
+
+        Dictionary<string, object>? picked = null;
+        for (var i = 0; i < keys.Length; i++)
+        {
+            if (TryGetAttribute(in ctx, keys[i], out var value))
+                (picked ??= new Dictionary<string, object>(StringComparer.Ordinal))[keys[i]] = value;
+        }
+        return picked?.ToFrozenDictionary(StringComparer.Ordinal);
+    }
+
+    private void FireExposure(string flagKey, string subjectId, CompiledExperiment exp, VariantResult result, in EvaluationContext ctx)
     {
         KomentoMetrics.Exposures.Add(1,
             new KeyValuePair<string, object?>("experiment", flagKey),
@@ -469,7 +485,8 @@ internal sealed class ExperimentClient
             IsEligible  = result.IsEligible,
             IsOutsider  = result.IsOutsider,
             Timestamp   = _timeProvider.GetUtcNow(),
-            ConfigRevision = exp.Revision
+            ConfigRevision = exp.Revision,
+            Context        = ExposureContextOf(exp, in ctx)
         });
 
         if (!written)

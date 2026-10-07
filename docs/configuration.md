@@ -24,7 +24,8 @@ The built-in `appsettings.json` source reads the `Komento:Experiments` array. Ot
         "overrides": [
           { "type": "subject", "subjectId": "user-42",       "variant": "treatment" },
           { "type": "segment", "segment":  "internal-staff", "variant": "treatment" }
-        ]
+        ],
+        "exposureContext": [ "country", "plan" ]
       }
     ]
   }
@@ -46,6 +47,8 @@ The built-in `appsettings.json` source reads the `Komento:Experiments` array. Ot
 |---|---|---|
 | `subject` | `subjectId`, `variant` | Forces a specific subject into a variant, before bucket assignment |
 | `segment` | `segment`, `variant` | Forces all members of a segment into a variant, before bucket assignment |
+
+**Exposure context** (`exposureContext`, optional) lists the evaluation-context attributes to record on this experiment's exposures, by key. Leave it out to record none. See [Exposures and conversions](exposures-and-conversions.md#exposure-context).
 
 How these rules combine is described in [Concepts](concepts.md#how-a-subject-is-assigned).
 

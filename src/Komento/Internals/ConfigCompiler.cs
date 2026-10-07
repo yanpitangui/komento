@@ -57,7 +57,8 @@ internal static class ConfigCompiler
             SubjectType = config.SubjectType,
             Variants    = compiled,
             Filters     = config.GlobalFilters.Count > 0 ? [.. config.GlobalFilters] : [],
-            Overrides   = config.Overrides.Count > 0    ? [.. config.Overrides]     : []
+            Overrides   = config.Overrides.Count > 0    ? [.. config.Overrides]     : [],
+            ExposureContext = config.ExposureContext.Count > 0 ? [.. config.ExposureContext] : []
         };
     }
 }

@@ -13,7 +13,8 @@ internal static class ExperimentConfigComparer
                && a.SubjectType == b.SubjectType
                && SequenceEqual(a.Variants, b.Variants, VariantEqual)
                && SequenceEqual(a.GlobalFilters, b.GlobalFilters, FilterEqual)
-               && SequenceEqual(a.Overrides, b.Overrides, OverrideEqual));
+               && SequenceEqual(a.Overrides, b.Overrides, OverrideEqual)
+               && SequenceEqual(a.ExposureContext, b.ExposureContext, string.Equals));
 
     private static bool VariantEqual(VariantConfig x, VariantConfig y)
         => x.Name == y.Name && x.Allocation.Equals(y.Allocation) && Equals(x.Value, y.Value);

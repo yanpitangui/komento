@@ -50,7 +50,8 @@ public sealed class AppSettingsExperimentSource : IExperimentSource
             SubjectType   = dto.SubjectType,
             Variants      = variants,
             GlobalFilters = filters,
-            Overrides     = overrides
+            Overrides     = overrides,
+            ExposureContext = dto.ExposureContext
         };
     }
 
@@ -86,6 +87,7 @@ public sealed class AppSettingsExperimentSource : IExperimentSource
         public List<VariantConfigDto>  Variants      { get; set; } = [];
         public List<FilterConfigDto>   GlobalFilters { get; set; } = [];
         public List<OverrideRuleDto>   Overrides     { get; set; } = [];
+        public List<string>            ExposureContext { get; set; } = [];
     }
 
     private sealed class VariantConfigDto

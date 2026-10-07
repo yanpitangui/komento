@@ -60,6 +60,12 @@ internal static class ConfigRevision
             }
         }
 
+        foreach (var key in config.ExposureContext)
+        {
+            Field(text, "exposure-context");
+            Field(text, key);
+        }
+
         var hash = XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(text.ToString()));
         return hash.ToString("x16", CultureInfo.InvariantCulture);
     }
