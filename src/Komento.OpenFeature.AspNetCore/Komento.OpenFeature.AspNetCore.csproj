@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Per-request OpenFeature transaction context built from Komento's ASP.NET Core enrichers.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\Komento.AspNetCore\Komento.AspNetCore.csproj" />
+    <ProjectReference Include="..\Komento.OpenFeature\Komento.OpenFeature.csproj" />
+  </ItemGroup>
+</Project>

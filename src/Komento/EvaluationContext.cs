@@ -16,6 +16,10 @@ public readonly struct EvaluationContext
         return _attributes.TryGetValue(key, out value);
     }
 
+    /// <summary>The attributes in this context. Empty for <see cref="Empty"/>.</summary>
+    public IReadOnlyDictionary<string, object> Attributes
+        => _attributes ?? FrozenDictionary<string, object>.Empty;
+
     internal void CopyTo(Dictionary<string, object> target)
     {
         if (_attributes is null) return;

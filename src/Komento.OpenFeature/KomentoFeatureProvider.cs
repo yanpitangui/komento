@@ -7,13 +7,61 @@ using KomentoCtx = Komento.EvaluationContext;
 
 namespace Komento.OpenFeature;
 
-public sealed class KomentoFeatureProvider(IExperimentClient client, IExperimentTracker? tracker = null) : FeatureProvider
+public sealed class KomentoFeatureProvider(
+    IExperimentClient   client,
+    IExperimentTracker? tracker = null,
+    IExperimentSource?  source  = null,
+    IConfigUpdater?     updater = null,
+    IConfigChanges?     changes = null) : FeatureProvider
 {
     public override Metadata GetMetadata() => new("Komento");
 
     /// <summary>
+    /// Loads the configs from the registered <see cref="IExperimentSource"/> (the same load as
+    /// <c>InitializeKomentoAsync</c>), so registering the provider is enough to start evaluating. When no source
+    /// or updater is registered the provider is ready immediately. A failing source makes the SDK report an
+    /// error status.
+    /// </summary>
+    public override async Task InitializeAsync(OFContext context, CancellationToken cancellationToken = default)
+    {
+        if (source is not null && updater is not null)
+        {
+            var all     = new HashSet<string>();
+            var configs = await source.LoadAsync(all, cancellationToken).ConfigureAwait(false);
+            await updater.UpdateAsync(configs, all, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Subscribe after the initial load, so loading the configs does not announce itself as a change.
+        if (changes is not null && _onChanged is null)
+        {
+            _onChanged = ids => EventChannel.Writer.TryWrite(new ProviderEventPayload
+            {
+                Type         = ProviderEventTypes.ProviderConfigurationChanged,
+                ProviderName = "Komento",
+                FlagsChanged = [.. ids]
+            });
+            changes.Changed += _onChanged;
+        }
+    }
+
+    /// <summary>Stops announcing config changes.</summary>
+    public override Task ShutdownAsync(CancellationToken cancellationToken = default)
+    {
+        if (changes is not null && _onChanged is not null)
+        {
+            changes.Changed -= _onChanged;
+            _onChanged = null;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Action<IReadOnlyCollection<string>>? _onChanged;
+
+    /// <summary>
     /// Forwards OpenFeature tracking calls to <see cref="IExperimentTracker"/>. Does nothing when no tracker is
-    /// registered or when <see cref="KomentoOptions.EnableTrackStream"/> is off.
+    /// registered or when <see cref="KomentoOptions.EnableTrackStream"/> is off. The SDK merges its global
+    /// context into the call but not the transaction context (it does for evaluations), so the provider adds the
+    /// transaction context underneath the call's own context to keep tracking consistent with evaluation.
     /// </summary>
     public override void Track(
         string trackingEventName, OFContext? evaluationContext = null, TrackingEventDetails? trackingEventDetails = null)
@@ -26,7 +74,8 @@ public sealed class KomentoFeatureProvider(IExperimentClient client, IExperiment
             return;
         }
 
-        if (string.IsNullOrEmpty(evaluationContext?.TargetingKey))
+        var context = WithTransactionContext(evaluationContext);
+        if (string.IsNullOrEmpty(context.TargetingKey))
         {
             CountDropped("no_subject");
             return;
@@ -46,8 +95,20 @@ public sealed class KomentoFeatureProvider(IExperimentClient client, IExperiment
             }
         }
 
-        var komentoCtx = MapContext(evaluationContext);
-        tracker.Track(trackingEventName, evaluationContext.TargetingKey, in komentoCtx, value, properties);
+        var komentoCtx = MapContext(context);
+        tracker.Track(trackingEventName, context.TargetingKey!, in komentoCtx, value, properties);
+    }
+
+    // The transaction context goes underneath; the call's own context wins where both set a value.
+    private static OFContext WithTransactionContext(OFContext? call)
+    {
+        var transaction = Api.Instance.GetTransactionContext();
+        if (transaction.Count == 0)
+            return call ?? OFContext.Empty;
+
+        var builder = OFContext.Builder().Merge(transaction);
+        if (call is not null) builder.Merge(call);
+        return builder.Build();
     }
 
     private static void CountDropped(string reason)
@@ -88,27 +149,55 @@ public sealed class KomentoFeatureProvider(IExperimentClient client, IExperiment
     {
         if (string.IsNullOrEmpty(context?.TargetingKey))
             return new ResolutionDetails<T>(flagKey, defaultValue,
-                errorType: ErrorType.TargetingKeyMissing, reason: Reason.Error);
+                errorType: ErrorType.TargetingKeyMissing, reason: Reason.Error,
+                errorMessage: $"A targeting key is required to evaluate '{flagKey}'.");
 
         if (!client.ExperimentExists(flagKey))
             return new ResolutionDetails<T>(flagKey, defaultValue,
-                errorType: ErrorType.FlagNotFound, reason: Reason.Default);
+                errorType: ErrorType.FlagNotFound, reason: Reason.Default,
+                errorMessage: $"No experiment named '{flagKey}' is registered.");
 
         var komentoCtx = MapContext(context);
         var result = await client.GetVariantAsync(flagKey, context.TargetingKey, in komentoCtx, ct)
             .ConfigureAwait(false);
 
+        var outcome  = result.IsOutsider ? "outsider" : result.IsEligible ? "assigned" : "ineligible";
+        var metadata = BuildMetadata(outcome, result.SubjectType);
+
         if (!result.IsEligible || result.IsOutsider)
             return new ResolutionDetails<T>(flagKey, defaultValue,
-                reason: Reason.Default, variant: result.VariantName);
+                reason: Reason.Default, variant: result.VariantName, flagMetadata: metadata);
 
         var (ok, value) = tryExtract(result);
-        return ok
-            ? new ResolutionDetails<T>(flagKey, value,
-                reason: Reason.TargetingMatch, variant: result.VariantName)
-            : new ResolutionDetails<T>(flagKey, defaultValue,
-                errorType: ErrorType.ParseError, reason: Reason.Error, variant: result.VariantName);
+        if (ok)
+            return new ResolutionDetails<T>(flagKey, value,
+                reason: result.Source == AssignmentSource.Hash ? Reason.Split : Reason.TargetingMatch,
+                variant: result.VariantName, flagMetadata: metadata);
+
+        return new ResolutionDetails<T>(flagKey, defaultValue,
+            errorType: ErrorType.TypeMismatch, reason: Reason.Error, variant: result.VariantName,
+            errorMessage: $"Variant '{result.VariantName}' has {Describe(result.Value)}, not a {ExpectedType<T>()}.",
+            flagMetadata: metadata);
     }
+
+    private static ImmutableMetadata BuildMetadata(string outcome, string? subjectType)
+    {
+        var values = new Dictionary<string, object> { ["outcome"] = outcome };
+        if (subjectType is not null) values["subjectType"] = subjectType;
+        return new ImmutableMetadata(values);
+    }
+
+    private static string Describe(object? value)
+        => value is null ? "no value" : $"a {value.GetType().Name} value";
+
+    private static string ExpectedType<T>() => typeof(T) switch
+    {
+        var t when t == typeof(bool)   => "Boolean",
+        var t when t == typeof(string) => "String",
+        var t when t == typeof(int)    => "Integer",
+        var t when t == typeof(double) => "Double",
+        _                              => "Structure"
+    };
 
     private static KomentoCtx MapContext(OFContext context)
     {

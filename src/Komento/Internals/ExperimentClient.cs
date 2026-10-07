@@ -6,7 +6,7 @@ using System.Threading.Channels;
 namespace Komento.Internals;
 
 internal sealed class ExperimentClient
-    : IExperimentClient, IConfigUpdater, IExposureStream, IExperimentTracker, ITrackStream
+    : IExperimentClient, IConfigUpdater, IConfigChanges, IExposureStream, IExperimentTracker, ITrackStream
 {
     private FrozenDictionary<string, CompiledExperiment> _experiments =
         FrozenDictionary<string, CompiledExperiment>.Empty;
@@ -170,7 +170,7 @@ internal sealed class ExperimentClient
             if (overrides[i] is SubjectOverride so &&
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
-                var r = MakeResult(so.Variant, exp, isEligible: true, isOutsider: false);
+                var r = MakeResult(so.Variant, exp, AssignmentSource.SubjectOverride);
                 FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
@@ -184,8 +184,9 @@ internal sealed class ExperimentClient
                 !(TryGetAttribute(in ctx, tf.Key, out var val) &&
                   string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
             {
-                FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
-                return VariantResult.Ineligible;
+                var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
+                FireExposure(flagKey, subjectId, exp, ineligible);
+                return ineligible;
             }
         }
 
@@ -203,7 +204,7 @@ internal sealed class ExperimentClient
             if (overrides[i] is SubjectOverride so &&
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
-                var r = MakeResult(so.Variant, exp, isEligible: true, isOutsider: false);
+                var r = MakeResult(so.Variant, exp, AssignmentSource.SubjectOverride);
                 FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
@@ -219,8 +220,9 @@ internal sealed class ExperimentClient
                     if (!(TryGetAttribute(in ctx, tf.Key, out var val) &&
                           string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
                     {
-                        FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
-                        return VariantResult.Ineligible;
+                        var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
+                        FireExposure(flagKey, subjectId, exp, ineligible);
+                        return ineligible;
                     }
                     break;
 
@@ -228,8 +230,9 @@ internal sealed class ExperimentClient
                     if (_segmentProvider is null ||
                         !await _segmentProvider.IsInSegmentAsync(subjectId, sf.Segment, ct))
                     {
-                        FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
-                        return VariantResult.Ineligible;
+                        var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
+                        FireExposure(flagKey, subjectId, exp, ineligible);
+                        return ineligible;
                     }
                     break;
             }
@@ -242,7 +245,7 @@ internal sealed class ExperimentClient
                 _segmentProvider is not null &&
                 await _segmentProvider.IsInSegmentAsync(subjectId, segOvr.Segment, ct))
             {
-                var r = MakeResult(segOvr.Variant, exp, isEligible: true, isOutsider: false);
+                var r = MakeResult(segOvr.Variant, exp, AssignmentSource.SegmentOverride);
                 FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
@@ -268,6 +271,8 @@ internal sealed class ExperimentClient
                         VariantName = variants[i].Name,
                         Value       = variants[i].Value,
                         IsEligible  = true,
+                        Source      = AssignmentSource.Hash,
+                        SubjectType = exp.SubjectType
                     };
                     FireExposure(flagKey, subjectId, exp, r);
                     return r;
@@ -275,25 +280,47 @@ internal sealed class ExperimentClient
             }
         }
 
-        var outsider = VariantResult.Outsider();
+        var outsider = VariantResult.Outsider() with { SubjectType = exp.SubjectType };
         FireExposure(flagKey, subjectId, exp, outsider);
         return outsider;
     }
 
     // ── IConfigUpdater ────────────────────────────────────────────────────────
 
+    public event Action<IReadOnlyCollection<string>>? Changed;
+
+    private void NotifyChanged(List<string> changed)
+    {
+        if (changed.Count == 0 || Changed is not { } handlers) return;
+
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<IReadOnlyCollection<string>>>())
+        {
+            try { handler(changed); }
+            catch { /* a subscriber must not break config updates */ }
+        }
+    }
+
     public ValueTask UpdateAsync(
         IReadOnlyDictionary<string, ExperimentConfig> configs, IReadOnlySet<string> experimentIds, CancellationToken ct = default)
     {
         var current  = Volatile.Read(ref _experiments);
         var compiled = new Dictionary<string, CompiledExperiment>(current, StringComparer.Ordinal);
+        var changed  = new List<string>();
 
         var loadAll = experimentIds.Count == 0;
         foreach (var (id, cfg) in configs)
-            if (loadAll || experimentIds.Contains(id))
-                compiled[id] = ConfigCompiler.Compile(cfg);
+        {
+            if (!loadAll && !experimentIds.Contains(id)) continue;
+
+            if (current.TryGetValue(id, out var existing) && ExperimentConfigComparer.AreEqual(existing.Config, cfg))
+                continue;   // unchanged: keep the compiled experiment we already have
+
+            compiled[id] = ConfigCompiler.Compile(cfg);
+            changed.Add(id);
+        }
 
         Volatile.Write(ref _experiments, compiled.ToFrozenDictionary(StringComparer.Ordinal));
+        NotifyChanged(changed);
         return ValueTask.CompletedTask;
     }
 
@@ -301,22 +328,18 @@ internal sealed class ExperimentClient
         => UpdateAsync(configs, new HashSet<string>(), ct);
 
     public ValueTask UpdateAsync(ExperimentConfig config, CancellationToken ct = default)
-    {
-        var current  = Volatile.Read(ref _experiments);
-        var compiled = new Dictionary<string, CompiledExperiment>(current, StringComparer.Ordinal)
-        {
-            [config.Id] = ConfigCompiler.Compile(config)
-        };
-        Volatile.Write(ref _experiments, compiled.ToFrozenDictionary(StringComparer.Ordinal));
-        return ValueTask.CompletedTask;
-    }
+        => UpdateAsync(new Dictionary<string, ExperimentConfig> { [config.Id] = config }, new HashSet<string>(), ct);
 
     public ValueTask RemoveAsync(string experimentId, CancellationToken ct = default)
     {
-        var current  = Volatile.Read(ref _experiments);
+        var current = Volatile.Read(ref _experiments);
+        if (!current.ContainsKey(experimentId))
+            return ValueTask.CompletedTask;
+
         var compiled = new Dictionary<string, CompiledExperiment>(current, StringComparer.Ordinal);
         compiled.Remove(experimentId);
         Volatile.Write(ref _experiments, compiled.ToFrozenDictionary(StringComparer.Ordinal));
+        NotifyChanged([experimentId]);
         return ValueTask.CompletedTask;
     }
 
@@ -383,7 +406,7 @@ internal sealed class ExperimentClient
     }
 
     private static VariantResult MakeResult(
-        string variantName, CompiledExperiment exp, bool isEligible, bool isOutsider)
+        string variantName, CompiledExperiment exp, AssignmentSource source)
     {
         object? value = null;
         for (var i = 0; i < exp.Variants.Length; i++)
@@ -394,8 +417,10 @@ internal sealed class ExperimentClient
         {
             VariantName = variantName,
             Value       = value,
-            IsEligible  = isEligible,
-            IsOutsider  = isOutsider
+            IsEligible  = true,
+            IsOutsider  = false,
+            Source      = source,
+            SubjectType = exp.SubjectType
         };
     }
 

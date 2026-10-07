@@ -51,6 +51,7 @@ internal static class ConfigCompiler
 
         return new CompiledExperiment
         {
+            Config      = config,
             Id          = config.Id,
             SubjectType = config.SubjectType,
             Variants    = compiled,

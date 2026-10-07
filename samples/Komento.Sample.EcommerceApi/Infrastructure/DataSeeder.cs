@@ -72,10 +72,10 @@ internal static class ExperimentSeed
                 SubjectType = "user",
                 Variants =
                 [
-                    new VariantConfig { Name = "collaborative", Allocation = 0.5, Value = "collaborative" },
-                    new VariantConfig { Name = "content-based", Allocation = 0.5, Value = "content-based" }
+                    new VariantConfig { Name = "collaborative", Allocation = 0.7, Value = "collaborative" },
+                    new VariantConfig { Name = "content-based", Allocation = 0.3, Value = "content-based" }
                 ],
-                GlobalFilters = [],
+                GlobalFilters = [new TraitEqualsFilter { Key = "plan", Value = "premium" }],
                 Overrides     = []
             }
         };
