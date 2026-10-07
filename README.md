@@ -115,9 +115,9 @@ string theme = await client.GetStringValueAsync("ui-theme", "default", ctx);
 | `PARSE_ERROR` | Variant value existed but could not be converted to the requested OpenFeature type |
 
 
-### 5. Record exposures (optional)
+### 5. Record exposures and conversions (optional)
 
-To know who saw which variant, register an exposure sink or export the built-in metrics. See [Exposures and metrics](#exposures-and-metrics).
+To know who saw which variant, register an exposure sink or export the built-in metrics. See [Exposures and metrics](#exposures-and-metrics). To record what subjects did afterwards, use `IExperimentTracker`. See [Conversions](#conversions).
 
 ---
 
@@ -589,6 +589,8 @@ A `System.Diagnostics.Metrics` meter named `Komento` is always on:
 | `komento.exposures` | `experiment`, `variant`, `outcome` (`assigned` / `outsider` / `ineligible`) | Exposures per variant |
 | `komento.exposures.dropped` | `experiment` | Exposures dropped because the exposure stream was full |
 | `komento.exposures.sink.dropped` | `sink`, `reason` (`queue_full` / `write_failed` / `write_timeout`) | Exposures a sink did not receive |
+| `komento.track.dropped` | `reason` (`queue_full` / `no_subject` / `no_event_name`) | Conversion events dropped before reaching a sink (see [Conversions](#conversions)) |
+| `komento.track.sink.dropped` | `sink`, `reason` (`queue_full` / `write_failed` / `write_timeout`) | Conversion events a sink did not receive |
 
 Outsiders and ineligible subjects are reported with `variant="control"`, so filter on `outcome="assigned"` to count exposures to real variants. Tags carry only bounded values (experiment, variant, outcome), which keeps metric cardinality low; per-subject detail lives in the exposure stream and sinks. To export with OpenTelemetry:
 
@@ -711,18 +713,18 @@ public readonly struct ExposureEvent
 
 ### Using exposures to measure results
 
-To say whether a variant "won", join exposures with your own conversion data (a purchase, a click, a signup) on the subject:
+To say whether a variant "won", join exposures with conversions (a purchase, a click, a signup) on the subject. Record conversions with `IExperimentTracker` (see [Conversions](#conversions)) or use the ones you already collect:
 
 1. Keep only exposures where `IsEligible && !IsOutsider`. Outsiders and ineligible subjects are not in the experiment.
-2. For each subject and experiment, take the **first** exposure. Komento emits an exposure on every evaluation, so a subject has many; it does not de-duplicate.
+2. For each subject and experiment, take the **first** exposure. Every evaluation is an exposure, so a subject has many; the first one is the one that counts.
 3. Count conversions that happened **after** that first exposure, grouped by `VariantName`, and compare rates between variants.
 
 Things that commonly break the analysis:
-- **The subject ID must match.** Your conversion events must use the same ID you passed to `GetVariantAsync` (with ASP.NET Core, the value your `ISubjectProvider` returns). Check `SubjectType` too: only join exposures with conversions keyed on the same kind of ID. Anonymous-to-logged-in ID changes break the join.
+- **The subject ID must match.** Conversions must use the same ID you passed to `GetVariantAsync` (with ASP.NET Core, the value your `ISubjectProvider` returns). Anonymous-to-logged-in ID changes break the join. When subjects come in more than one kind, use `SubjectType` on the exposure and add a `subjectType` attribute to the context you pass to `Track`, so you can join on both.
 - **Evaluate at the point of use.** An evaluation counts as an exposure even if the user never saw the feature. Evaluate where the user would actually see the variant, not at startup.
-- **Dropped exposures bias results.** Check the drop counters before trusting numbers.
+- **Dropped events bias results.** Check the drop counters before trusting numbers.
 
-Komento does not compute significance for you; use your analytics tool or a stats library on the joined data.
+Compute significance in your analytics tool or with a stats library, on the joined data.
 
 ### Reading the stream directly
 
@@ -737,6 +739,62 @@ await foreach (var exposure in stream.Reader.ReadAllAsync(ct))
 ```
 
 There is a single reader, so run one consumer. The stream is disabled by default; with no consumer nothing is buffered.
+
+## Conversions
+
+A *conversion* is something a subject did that you want to measure an experiment on: a purchase, a signup, a click. Record one with `IExperimentTracker`, natively or through OpenFeature, and deliver it with track sinks. Komento gives you conversion events to join with exposures; the results themselves are computed in your analytics tool.
+
+Enable the stream (off by default; `Track` is a no-op until it is on):
+
+```csharp
+services.AddKomento(o =>
+    {
+        o.EnableTrackStream = true;
+        o.StaticContext     = EvaluationContext.Create().Set("service", "checkout").Build();
+    })
+    .AddTrackSink<MyTrackSink>();          // or AddLoggingTrackSink() to see what flows
+```
+
+**Natively:**
+
+```csharp
+tracker.Track("purchase", userId, ctx, value: 49.90,
+              properties: new Dictionary<string, object?> { ["currency"] = "BRL" });
+```
+
+`ctx` is the same `EvaluationContext` you pass to `GetVariantAsync`, so one prebuilt context serves both calls. There is also an overload without it.
+
+**Through OpenFeature** (`KomentoFeatureProvider` forwards the call to the tracker):
+
+```csharp
+featureClient.Track("purchase", evalCtx,
+    TrackingEventDetails.Builder().SetValue(49.90).Set("currency", "BRL").Build());
+```
+
+The tracker is injected into the provider automatically when it is registered in DI. This needs the `OpenFeature` package at 2.9.0 or later.
+
+### The conversion event
+
+```csharp
+public readonly struct TrackEvent
+{
+    public string?                               EventName  { get; init; }
+    public string?                               SubjectId  { get; init; }
+    public double?                               Value      { get; init; }   // an amount, a duration, ...
+    public IReadOnlyDictionary<string, object?>? Properties { get; init; }   // the fields passed with the call
+    public IReadOnlyDictionary<string, object>?  Context    { get; init; }   // static context + per-call context
+    public DateTimeOffset                        Timestamp  { get; init; }
+}
+```
+
+- `Context` is `KomentoOptions.StaticContext` plus the per-call context, with per-call attributes taking precedence. With OpenFeature, the per-call context is the one the SDK assembled from its global, transaction, client and invocation layers. Set `IncludeContextInTrackEvents = false` to leave it off the event when attributes are personal data.
+- Conversions are keyed by `SubjectId`. When subjects come in more than one kind, add a `subjectType` attribute to the context so sinks can join on the right kind.
+- The native `Track` throws `ArgumentException` for a missing event name or subject ID. A call arriving through OpenFeature without a targeting key (or without an event name) is skipped and counted in `komento.track.dropped` with `reason="no_subject"` (or `"no_event_name"`).
+- A full track channel (`TrackChannelCapacity`, default 4096) drops the event and counts it in `komento.track.dropped` with `reason="queue_full"`.
+
+### Track sinks
+
+Track sinks work like exposure sinks: `ITrackSink.WriteAsync(IReadOnlyList<TrackEvent>, CancellationToken)`, one isolated queue per sink, the same options (`BatchSize`, `FlushInterval`, `MaxPendingBatches`, `WriteTimeout`, `ShutdownFlushTimeout`) and the same failure behavior. Register with `AddTrackSink<T>()`, a delegate overload, or `AddLoggingTrackSink()`; it needs `EnableTrackStream = true`, and the host fails at startup with a clear message otherwise. Drops are counted in `komento.track.sink.dropped` (tags `sink` and `reason`). Alert on both drop counters: a non-zero count means the data is incomplete.
 
 ## Performance
 
