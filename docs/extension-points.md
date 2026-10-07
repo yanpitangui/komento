@@ -1,6 +1,6 @@
 # Extension Points
 
-Komento is designed around eight public interfaces. Each covers one seam: six in the evaluation pipeline, and two for getting exposure data out of it. This document explains why each exists and what problem it is meant to solve — intended as a reference for deciding which implementations to build.
+Komento is designed around eleven public interfaces. Each covers one seam: six in the evaluation pipeline, two for getting exposure data out of it, and three for recording conversions. This document explains why each exists and what problem it is meant to solve — intended as a reference for deciding which implementations to build.
 
 ---
 
@@ -186,7 +186,7 @@ public readonly struct ExposureEvent
 
 **Opt-in:** Off by default. Set `KomentoOptions.EnableExposureStream = true`. With it off, nothing is buffered (a channel with no reader would only fill up and drop), and reading `Reader` throws an `InvalidOperationException` that names the option.
 
-**Single reader.** A channel has one logical consumer. To fan out to several destinations, use `Komento.Exposure` (below) rather than reading the stream from several places.
+**Single reader.** A channel has one logical consumer. To fan out to several destinations, use `Komento.Sinks` (below) rather than reading the stream from several places.
 
 **Fields worth knowing:**
 - `SubjectType` says which kind of ID `SubjectId` holds (`"user"`, `"device"`, ...). Only join exposures with conversion events keyed on the same kind of ID.
@@ -199,7 +199,7 @@ public readonly struct ExposureEvent
 
 ---
 
-## `IExposureSink` *(Komento.Exposure)*
+## `IExposureSink` *(Komento.Sinks)*
 
 ```csharp
 public interface IExposureSink
@@ -210,7 +210,7 @@ public interface IExposureSink
 
 **Why it exists:** Most destinations (a warehouse, an events service, a message queue) want batches, and every one needs the same plumbing: batching by size and time, a bounded buffer, a timeout, error handling, and a flush on shutdown. You should only write the part that is specific to your destination.
 
-**What it solves:** `Komento.Exposure` reads `IExposureStream` once and runs each registered sink in its own isolated pipeline: its own bounded queue of batches, its own timeout, and a sequential consumer. A slow or failing sink affects only itself — other sinks and evaluation carry on.
+**What it solves:** `Komento.Sinks` reads `IExposureStream` once and runs each registered sink in its own isolated pipeline: its own bounded queue of batches, its own timeout, and a sequential consumer. A slow or failing sink affects only itself — other sinks and evaluation carry on.
 
 ```csharp
 services.AddKomento(o => o.EnableExposureStream = true)       // required
@@ -228,7 +228,61 @@ services.AddKomento(o => o.EnableExposureStream = true)       // required
 - A sink is created once, as a singleton, from the root service provider, so it must not depend on scoped services.
 - Options per sink: `Name`, `BatchSize`, `FlushInterval`, `MaxPendingBatches`, `WriteTimeout`, `ShutdownFlushTimeout`. When a sink falls behind, its queue fills and further batches are dropped for that sink only (`reason=queue_full`).
 - On shutdown each sink gets `ShutdownFlushTimeout` to write what is pending, then is abandoned. A sink that ignores its token and blocks forever cannot be killed; it fills its queue, then drops. Watch the drop counters.
-- Requires `Komento.Exposure` and `EnableExposureStream`. The host fails at startup with a clear message if the stream is not enabled. The README's "Exposures and metrics" section has a worked example.
+- Requires `Komento.Sinks` and `EnableExposureStream`. The host fails at startup with a clear message if the stream is not enabled. The README's "Exposures and metrics" section has a worked example.
+
+---
+
+## `IExperimentTracker`
+
+```csharp
+public interface IExperimentTracker
+{
+    void Track(string eventName, string subjectId, in EvaluationContext ctx,
+               double? value = null, IReadOnlyDictionary<string, object?>? properties = null);
+
+    void Track(string eventName, string subjectId,
+               double? value = null, IReadOnlyDictionary<string, object?>? properties = null);
+}
+```
+
+**Why it exists:** An experiment is judged by what subjects do afterwards. `Track` records that, next to the exposure data, without leaving the process or blocking the caller.
+
+**What it solves:** A non-blocking way to record a conversion natively, with the same evaluation context you pass to `GetVariantAsync`. The engine adds `KomentoOptions.StaticContext` underneath (per-call attributes take precedence), stamps the time from `TimeProvider`, copies the properties, and queues a `TrackEvent` on its own bounded channel.
+
+**Production notes:**
+- It is a narrow interface on the same engine singleton as `IExperimentClient`, so existing implementations and stubs of `IExperimentClient` are unaffected.
+- `Track` does nothing unless `KomentoOptions.EnableTrackStream = true`. A missing event name or subject ID throws `ArgumentException`.
+- `KomentoFeatureProvider` forwards OpenFeature's `Track` to it, so both entry points produce the same event.
+
+---
+
+## `ITrackStream`
+
+```csharp
+public interface ITrackStream
+{
+    ChannelReader<TrackEvent> Reader { get; }
+}
+```
+
+**Why it exists and what it solves:** The read side for conversions. It is a separate channel from `IExposureStream`, so conversions keep their own room however many exposures arrive, and each stream has its own capacity (`TrackChannelCapacity`), drop counter and opt-in.
+
+**Production notes:** The stream has a single reader, like the exposure stream; use `ITrackSink` for several destinations. `Reader` throws an `InvalidOperationException` that names `EnableTrackStream` when the stream is off. A full channel drops the event and counts it in `komento.track.dropped`.
+
+---
+
+## `ITrackSink` *(Komento.Sinks)*
+
+```csharp
+public interface ITrackSink
+{
+    ValueTask WriteAsync(IReadOnlyList<TrackEvent> batch, CancellationToken ct);
+}
+```
+
+**Why it exists and what it solves:** What `IExposureSink` does for exposures, for conversions: batching, per-sink isolation, timeouts, shutdown flush and drop counting, with only the destination-specific write left to you.
+
+**Contract and production notes:** The contract matches `IExposureSink`: calls are sequential per sink, throwing drops the batch, retries belong inside the sink, and the sink is a singleton resolved from the root provider. Register with `AddTrackSink<T>()`, a delegate overload, or `AddLoggingTrackSink()`; it needs `EnableTrackStream`. Options are `TrackSinkOptions` (the same properties as `ExposureSinkOptions`, both derived from `SinkOptions`). Drops are counted in `komento.track.sink.dropped`.
 
 ---
 

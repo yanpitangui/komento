@@ -1,13 +1,15 @@
 namespace Komento;
 
-public sealed class ExposureSinkOptions
+/// <summary>Settings shared by every kind of sink. Each registered sink gets its own queue and pipeline.</summary>
+public abstract class SinkOptions
 {
     /// <summary>
-    /// Identifies this sink in metrics (the <c>sink</c> tag) and logs. Defaults to <c>sink-{index}</c>.
+    /// Identifies this sink in metrics (the <c>sink</c> tag) and logs. Defaults to the sink's type name,
+    /// or <c>sink-{index}</c> for a delegate sink.
     /// </summary>
     public string? Name { get; set; }
 
-    /// <summary>Maximum number of exposures handed to the sink in one call.</summary>
+    /// <summary>Maximum number of events handed to the sink in one call.</summary>
     public int BatchSize { get; set; } = 100;
 
     /// <summary>A partial batch is flushed after this interval.</summary>
@@ -15,7 +17,7 @@ public sealed class ExposureSinkOptions
 
     /// <summary>
     /// Batches buffered while the sink is busy. When full, new batches are dropped for this sink only
-    /// and counted in <c>komento.exposures.sink.dropped</c>.
+    /// and counted in the sink's dropped counter.
     /// </summary>
     public int MaxPendingBatches { get; set; } = 64;
 

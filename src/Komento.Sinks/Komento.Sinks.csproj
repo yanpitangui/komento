@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Batched, isolated exposure sinks for Komento.</Description>
+    <Description>Batched, isolated sinks for Komento exposures and conversions.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -9,6 +9,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Komento.Exposure.Tests" />
+    <InternalsVisibleTo Include="Komento.Sinks.Tests" />
   </ItemGroup>
 </Project>

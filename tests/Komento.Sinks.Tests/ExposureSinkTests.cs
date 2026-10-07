@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using TUnit.Core;
 
-namespace Komento.Exposure.Tests;
+namespace Komento.Sinks.Tests;
 
 public class ExposureSinkTests
 {
@@ -196,6 +196,7 @@ public class ExposureSinkTests
         CountDropped("slow-sink", out var listener, out var dropped);
         using var _ = listener;
 
+        var time     = new FakeTimeProvider();
         var calls    = 0;
         var received = new TaskCompletionSource<ExposureEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -210,13 +211,23 @@ public class ExposureSinkTests
                 o =>
                 {
                     o.Name = "slow-sink"; o.BatchSize = 1; o.FlushInterval = TimeSpan.FromHours(1);
-                    o.WriteTimeout = TimeSpan.FromMilliseconds(100);
+                    o.WriteTimeout = TimeSpan.FromSeconds(30);
                 }),
-            experiments: OneVariant("slow-exp"));
+            services => services.AddSingleton<TimeProvider>(time),
+            OneVariant("slow-exp"));
 
         await EvaluateAsync(provider, "slow-exp", 2);
 
-        (await received.Task.WaitAsync(Timeout)).SubjectId.Should().Be("user-1");
+        // The first write is stuck until its timeout elapses on the fake clock. The pipeline runs on other
+        // threads, so keep advancing until the second batch is delivered; the token bounds the wait.
+        using var timeout = new CancellationTokenSource(Timeout);
+        while (!received.Task.IsCompleted)
+        {
+            time.Advance(TimeSpan.FromSeconds(30));
+            await Task.Delay(10, timeout.Token);
+        }
+
+        (await received.Task).SubjectId.Should().Be("user-1");
         dropped().Should().Be(1);
     }
 
@@ -243,16 +254,28 @@ public class ExposureSinkTests
     [Test]
     public async Task Stopping_does_not_wait_longer_than_the_flush_window_for_a_blocked_sink()
     {
+        var time = new FakeTimeProvider();
+
         await using var provider = await StartAsync(
             b => b.AddExposureSink(
                 async (_, _) => await Task.Delay(System.Threading.Timeout.Infinite), // ignores cancellation
-                o => { o.BatchSize = 1; o.ShutdownFlushTimeout = TimeSpan.FromMilliseconds(200); }),
-            experiments: OneVariant("stuck-exp"));
+                o => { o.BatchSize = 1; o.ShutdownFlushTimeout = TimeSpan.FromSeconds(10); }),
+            services => services.AddSingleton<TimeProvider>(time),
+            OneVariant("stuck-exp"));
 
         await EvaluateAsync(provider, "stuck-exp", 3);
 
         var stop = Task.WhenAll(provider.GetServices<IHostedService>().Select(h => h.StopAsync(CancellationToken.None)));
-        await stop.WaitAsync(Timeout); // completes instead of hanging
+
+        // The flush window elapses on the fake clock; the token bounds the wait so a hang fails the test.
+        using var timeout = new CancellationTokenSource(Timeout);
+        while (!stop.IsCompleted)
+        {
+            time.Advance(TimeSpan.FromSeconds(10));
+            await Task.Delay(10, timeout.Token);
+        }
+
+        await stop; // completes instead of hanging
     }
 
     private sealed class RecordingSink : IExposureSink

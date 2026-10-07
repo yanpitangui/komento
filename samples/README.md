@@ -13,6 +13,9 @@ A runnable end-to-end demo that exercises every Komento public extension point:
 | `IExperimentClient` | Direct usage in `/products/{id}` |
 | `KomentoFeatureProvider` | OpenFeature bridge in `/recommendations` |
 | `IExposureSink` | `PostgresExposureSink` batches every exposure into the `exposures` table |
+| `IExperimentTracker` / `ITrackSink` | `/products/{id}/purchase` records a conversion natively; `PostgresTrackSink` stores it in the `conversions` table |
+| OpenFeature `Track` | `/recommendations/clicks` records a conversion through `IFeatureClient.Track`, delivered by the same sink |
+| `KomentoOptions.StaticContext` | Adds `service = ecommerce-api` to every evaluation and every recorded conversion |
 | Aspire orchestration | AppHost wires NATS + PostgreSQL + both APIs |
 
 ## Projects
@@ -165,6 +168,29 @@ Outsiders and ineligible subjects are recorded too (with variant `control`); fil
 when analyzing. Every evaluation is recorded (nothing is de-duplicated), so the endpoint returns
 at most the latest 100 exposures for the subject. The same exposures are also written to the
 EcommerceApi log by `AddLoggingExposureSink()`.
+
+### 8. Record a conversion
+
+Conversions are recorded two ways, and both end up in the `conversions` table through the same sink.
+
+```bash
+# Native: IExperimentTracker.Track
+curl -X POST http://localhost:<ecommerce-port>/products/42/purchase \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{ "amount": 49.90 }'
+
+# OpenFeature: featureClient.Track
+curl -X POST http://localhost:<ecommerce-port>/recommendations/clicks \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{ "item": "Widget A" }'
+
+# Read them back
+curl "http://localhost:<admin-port>/conversions?subjectId=alice"
+```
+
+Each conversion carries the evaluation context: the per-call attributes (here the user's `plan`)
+plus the static context configured once on `KomentoOptions` (here `service`). The conversions endpoint
+returns at most the latest 100 for the subject, newest first.
 
 ## Seeded data
 

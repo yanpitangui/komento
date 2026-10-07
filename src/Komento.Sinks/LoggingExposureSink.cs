@@ -5,7 +5,7 @@ namespace Komento;
 /// <summary>Writes each exposure as a structured log entry. Useful to see what is flowing.</summary>
 public sealed class LoggingExposureSink(ILoggerFactory loggerFactory) : IExposureSink
 {
-    private readonly ILogger _logger = loggerFactory.CreateLogger("Komento.Exposure.Sink");
+    private readonly ILogger _logger = loggerFactory.CreateLogger("Komento.Sinks.Exposure");
 
     public ValueTask WriteAsync(IReadOnlyList<ExposureEvent> batch, CancellationToken ct)
     {

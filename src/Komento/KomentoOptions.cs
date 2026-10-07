@@ -12,6 +12,21 @@ public sealed class KomentoOptions
     public bool                 EnableExposureStream    { get; set; }
 
     /// <summary>
+    /// When true, conversions recorded through <see cref="IExperimentTracker"/> are written to a bounded channel
+    /// readable via <see cref="ITrackStream"/>. Off by default: <c>Track</c> does nothing until it is enabled.
+    /// </summary>
+    public bool                 EnableTrackStream       { get; set; }
+
+    /// <summary>Capacity of the track channel. When it is full, new conversion events are dropped and counted.</summary>
+    public int                  TrackChannelCapacity    { get; set; } = 4096;
+
+    /// <summary>
+    /// Record the evaluation context (the static context plus the per-call context) on each conversion event.
+    /// Set to false if context attributes are personal data that must not be stored with conversions.
+    /// </summary>
+    public bool                 IncludeContextInTrackEvents { get; set; } = true;
+
+    /// <summary>
     /// Record each exposure as a <c>feature_flag.evaluation</c> event on <see cref="System.Diagnostics.Activity.Current"/>
     /// (for example the ASP.NET Core request span). Does nothing when no trace is being recorded.
     /// </summary>

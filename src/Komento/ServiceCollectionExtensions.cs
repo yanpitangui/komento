@@ -25,6 +25,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IExperimentClient>(sp => sp.GetRequiredService<ExperimentClient>());
         services.AddSingleton<IConfigUpdater>(sp => sp.GetRequiredService<ExperimentClient>());
         services.AddSingleton<IExposureStream>(sp => sp.GetRequiredService<ExperimentClient>());
+        services.AddSingleton<IExperimentTracker>(sp => sp.GetRequiredService<ExperimentClient>());
+        services.AddSingleton<ITrackStream>(sp => sp.GetRequiredService<ExperimentClient>());
 
         return new KomentoBuilder(services);
     }

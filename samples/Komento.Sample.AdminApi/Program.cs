@@ -141,4 +141,40 @@ app.MapGet("/exposures", async Task<Results<Ok<IReadOnlyList<ExposureResponse>>,
     return TypedResults.Ok<IReadOnlyList<ExposureResponse>>(exposures);
 });
 
+// ── Conversion endpoints ──────────────────────────────────────────────────
+
+app.MapGet("/conversions", async Task<Results<Ok<IReadOnlyList<ConversionResponse>>, ValidationProblem>> (
+    string subjectId, NpgsqlDataSource db, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(subjectId))
+        return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+        {
+            [nameof(subjectId)] = ["subjectId is required."]
+        });
+
+    await using var conn = await db.OpenConnectionAsync(ct);
+    await using var cmd  = new NpgsqlCommand(
+        "SELECT event_name, subject_id, value, properties::text, context::text, recorded_at " +
+        "FROM conversions WHERE subject_id = $1 ORDER BY recorded_at DESC, id DESC LIMIT 100", conn);
+    cmd.Parameters.AddWithValue(subjectId);
+    await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+    var conversions = new List<ConversionResponse>();
+    while (await reader.ReadAsync(ct))
+        conversions.Add(new ConversionResponse(
+            EventName:  reader.GetString(0),
+            SubjectId:  reader.GetString(1),
+            Value:      reader.IsDBNull(2) ? null : reader.GetDouble(2),
+            Properties: ReadFields(reader, 3),
+            Context:    ReadFields(reader, 4),
+            RecordedAt: reader.GetFieldValue<DateTimeOffset>(5)));
+
+    return TypedResults.Ok<IReadOnlyList<ConversionResponse>>(conversions);
+
+    static Dictionary<string, string?>? ReadFields(NpgsqlDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal)
+            ? null
+            : JsonSerializer.Deserialize<Dictionary<string, string?>>(reader.GetString(ordinal));
+});
+
 app.Run();

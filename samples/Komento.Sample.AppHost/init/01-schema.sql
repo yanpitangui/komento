@@ -23,3 +23,15 @@ CREATE TABLE IF NOT EXISTS exposures (
 );
 
 CREATE INDEX IF NOT EXISTS exposures_subject_idx ON exposures (subject_id);
+
+CREATE TABLE IF NOT EXISTS conversions (
+    id          BIGSERIAL PRIMARY KEY,
+    event_name  TEXT             NOT NULL,
+    subject_id  TEXT             NOT NULL,
+    value       DOUBLE PRECISION NULL,
+    properties  JSONB            NULL,
+    context     JSONB            NULL,
+    recorded_at TIMESTAMPTZ      NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS conversions_subject_idx ON conversions (subject_id);
