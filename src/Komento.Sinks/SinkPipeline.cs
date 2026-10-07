@@ -2,7 +2,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using R3;
 
-namespace Komento.Exposure;
+namespace Komento.Sinks;
 
 /// <summary>
 /// One sink's isolated pipeline: batching, a bounded queue of pending batches, and a sequential

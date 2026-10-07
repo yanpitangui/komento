@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using TUnit.Core;
 
-namespace Komento.Exposure.Tests;
+namespace Komento.Sinks.Tests;
 
 public class ExposureSinkTests
 {

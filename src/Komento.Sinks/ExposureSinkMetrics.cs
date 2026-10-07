@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
 
-namespace Komento.Exposure;
+namespace Komento.Sinks;
 
 internal static class ExposureSinkMetrics
 {

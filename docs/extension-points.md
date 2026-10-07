@@ -186,7 +186,7 @@ public readonly struct ExposureEvent
 
 **Opt-in:** Off by default. Set `KomentoOptions.EnableExposureStream = true`. With it off, nothing is buffered (a channel with no reader would only fill up and drop), and reading `Reader` throws an `InvalidOperationException` that names the option.
 
-**Single reader.** A channel has one logical consumer. To fan out to several destinations, use `Komento.Exposure` (below) rather than reading the stream from several places.
+**Single reader.** A channel has one logical consumer. To fan out to several destinations, use `Komento.Sinks` (below) rather than reading the stream from several places.
 
 **Fields worth knowing:**
 - `SubjectType` says which kind of ID `SubjectId` holds (`"user"`, `"device"`, ...). Only join exposures with conversion events keyed on the same kind of ID.
@@ -199,7 +199,7 @@ public readonly struct ExposureEvent
 
 ---
 
-## `IExposureSink` *(Komento.Exposure)*
+## `IExposureSink` *(Komento.Sinks)*
 
 ```csharp
 public interface IExposureSink
@@ -210,7 +210,7 @@ public interface IExposureSink
 
 **Why it exists:** Most destinations (a warehouse, an events service, a message queue) want batches, and every one needs the same plumbing: batching by size and time, a bounded buffer, a timeout, error handling, and a flush on shutdown. You should only write the part that is specific to your destination.
 
-**What it solves:** `Komento.Exposure` reads `IExposureStream` once and runs each registered sink in its own isolated pipeline: its own bounded queue of batches, its own timeout, and a sequential consumer. A slow or failing sink affects only itself — other sinks and evaluation carry on.
+**What it solves:** `Komento.Sinks` reads `IExposureStream` once and runs each registered sink in its own isolated pipeline: its own bounded queue of batches, its own timeout, and a sequential consumer. A slow or failing sink affects only itself — other sinks and evaluation carry on.
 
 ```csharp
 services.AddKomento(o => o.EnableExposureStream = true)       // required
@@ -228,7 +228,7 @@ services.AddKomento(o => o.EnableExposureStream = true)       // required
 - A sink is created once, as a singleton, from the root service provider, so it must not depend on scoped services.
 - Options per sink: `Name`, `BatchSize`, `FlushInterval`, `MaxPendingBatches`, `WriteTimeout`, `ShutdownFlushTimeout`. When a sink falls behind, its queue fills and further batches are dropped for that sink only (`reason=queue_full`).
 - On shutdown each sink gets `ShutdownFlushTimeout` to write what is pending, then is abandoned. A sink that ignores its token and blocks forever cannot be killed; it fills its queue, then drops. Watch the drop counters.
-- Requires `Komento.Exposure` and `EnableExposureStream`. The host fails at startup with a clear message if the stream is not enabled. The README's "Exposures and metrics" section has a worked example.
+- Requires `Komento.Sinks` and `EnableExposureStream`. The host fails at startup with a clear message if the stream is not enabled. The README's "Exposures and metrics" section has a worked example.
 
 ---
 

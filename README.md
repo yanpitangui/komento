@@ -24,7 +24,7 @@ if (result == "treatment")
 | Komento | Core engine, all interfaces, DI registration | [![NuGet](https://img.shields.io/nuget/v/Komento.svg)](https://www.nuget.org/packages/Komento) |
 | Komento.AspNetCore | ASP.NET Core integration (filters, subject provider, enrichers) | [![NuGet](https://img.shields.io/nuget/v/Komento.AspNetCore.svg)](https://www.nuget.org/packages/Komento.AspNetCore) |
 | Komento.OpenFeature | OpenFeature provider adapter | [![NuGet](https://img.shields.io/nuget/v/Komento.OpenFeature.svg)](https://www.nuget.org/packages/Komento.OpenFeature) |
-| Komento.Exposure | Batched, isolated exposure sinks (R3) | [![NuGet](https://img.shields.io/nuget/v/Komento.Exposure.svg)](https://www.nuget.org/packages/Komento.Exposure) |
+| Komento.Sinks | Batched, isolated sinks for exposures and conversions (R3) | [![NuGet](https://img.shields.io/nuget/v/Komento.Sinks.svg)](https://www.nuget.org/packages/Komento.Sinks) |
 ---
 
 ## Quick start
@@ -575,7 +575,7 @@ An *exposure* is recorded every time Komento evaluates an experiment for a subje
 | | Metrics | Exposure sinks |
 |---|---|---|
 | For | Dashboards and alerts: "how many exposures per variant?" | Analysis: "which subject saw which variant, and when?" |
-| Needs | Nothing (always on) | `Komento.Exposure` and `EnableExposureStream` |
+| Needs | Nothing (always on) | `Komento.Sinks` and `EnableExposureStream` |
 | Contains subject IDs | No | Yes |
 
 Komento does not analyze results. It gives you clean data to send wherever you do (a warehouse, an events pipeline, a product-analytics tool).
@@ -626,7 +626,7 @@ Turn the event off entirely with `EmitActivityEvents = false`.
 **1. Install the package.**
 
 ```
-dotnet add package Komento.Exposure
+dotnet add package Komento.Sinks
 ```
 
 **2. Write a sink.** A sink receives batches of exposures and sends them to your destination. This one posts them to an HTTP endpoint:
@@ -669,7 +669,7 @@ Sinks run in a background service, so your app must run under a .NET generic hos
 
 ```csharp
 .AddLoggingExposureSink()
-// info: Komento.Exposure.Sink
+// info: Komento.Sinks.Exposure
 //       Exposure checkout-button subject user-42 -> treatment (eligible: True, outsider: False) at 2026-10-06T12:00:00.0000000+00:00
 ```
 
@@ -726,7 +726,7 @@ Komento does not compute significance for you; use your analytics tool or a stat
 
 ### Reading the stream directly
 
-Skip `Komento.Exposure` if you want your own pipeline (for example to push into Kafka). With `EnableExposureStream = true`, resolve `IExposureStream` and read it:
+Skip `Komento.Sinks` if you want your own pipeline (for example to push into Kafka). With `EnableExposureStream = true`, resolve `IExposureStream` and read it:
 
 ```csharp
 var stream = provider.GetRequiredService<IExposureStream>();

@@ -1,4 +1,4 @@
-using Komento.Exposure;
+using Komento.Sinks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -58,7 +58,7 @@ public static class KomentoExposureBuilderExtensions
             sp.GetRequiredService<IExposureStream>(),
             sp.GetServices<ExposureSinkRegistration>(),
             sp.GetService<TimeProvider>() ?? TimeProvider.System,
-            sp.GetService<ILoggerFactory>()?.CreateLogger("Komento.Exposure") ?? NullLogger.Instance));
+            sp.GetService<ILoggerFactory>()?.CreateLogger("Komento.Sinks") ?? NullLogger.Instance));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ExposureFanOutService>(
             sp => sp.GetRequiredService<ExposureFanOutService>()));
 

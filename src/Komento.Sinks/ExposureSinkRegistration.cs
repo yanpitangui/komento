@@ -1,4 +1,4 @@
-namespace Komento.Exposure;
+namespace Komento.Sinks;
 
 internal delegate ValueTask SinkWrite(IReadOnlyList<ExposureEvent> batch, CancellationToken ct);
 

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Komento.Exposure;
+namespace Komento.Sinks;
 
 /// <summary>Reads the exposure stream once and hands each exposure to every sink's own queue.</summary>
 internal sealed class ExposureFanOutService(
