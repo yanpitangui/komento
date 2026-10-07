@@ -7,4 +7,7 @@ internal sealed class CompiledExperiment
     public CompiledVariant[] Variants    { get; init; } = [];
     public FilterConfig[]    Filters     { get; init; } = [];
     public OverrideRule[]    Overrides   { get; init; } = [];
+
+    /// <summary>The config this experiment was compiled from, kept to tell real changes from reloads.</summary>
+    public ExperimentConfig  Config      { get; init; } = null!;
 }
