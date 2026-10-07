@@ -24,7 +24,7 @@ public interface IExperimentSource
 **Production notes:**
 - The built-in `AppSettingsExperimentSource` reads from `IConfiguration`. This is suitable for local development and integration tests only.
 - A production source will typically call an internal config service, query a database table, or read from a distributed cache.
-- `LoadAsync` is not on the hot path — it only runs at startup (and when `AddPeriodicRefresh` triggers a refresh). I/O and allocations are acceptable here.
+- `LoadAsync` runs at startup and when `AddPeriodicRefresh` triggers a refresh, away from the hot path, so I/O and allocations are fine here.
 - `Komento.Http` provides a ready-made HTTP source, and `InMemoryExperimentSource` covers tests. See [Configuration](configuration.md#sources).
 
 ---
@@ -71,12 +71,12 @@ public interface ISegmentProvider
 
 **Hot path warning:** This method IS on the hot path. Every call to `GetVariantAsync` for an experiment with segment operations will call it. Implementations must be fast:
 - Static lists: sort + binary search in memory (O log n), zero allocations. Use the built-in `InMemorySegmentProvider`, registered with `AddSegmentProvider(instance)`.
-- Dynamic lists: a local in-process cache with a short TTL (30–60 seconds) in front of the real store. Never call a database or HTTP endpoint inline without caching.
+- Dynamic lists: a local in-process cache with a short TTL (30–60 seconds) in front of the real store, so a database or HTTP call happens at most once per TTL per subject.
 
 **Production notes:**
 - The built-in `InMemorySegmentProvider` uses BinSets (sorted binary arrays, binary search). It is allocation-free and O(log n). It is suitable for static lists loaded at startup — millions of IDs are practical.
 - For dynamic segments (membership changes frequently), implement a provider backed by Redis Sets, a database bitmap, or a Bloom filter, with a local cache layer.
-- The interface is intentionally minimal. The provider is not responsible for knowing which experiments use which segments — the engine handles that.
+- The interface is intentionally minimal. The engine tracks which experiments use which segments; the provider only answers membership.
 
 ---
 
@@ -147,7 +147,7 @@ public interface IExperimentClient
 
 **Why it exists:** This is the primary read surface — the interface consumers call to evaluate a flag. It is separated from the engine's write surface (`IConfigUpdater`) so that application code only ever holds a reference to the read side.
 
-**What it solves:** Defines the contract for flag evaluation independently of the engine implementation. Application code, ASP.NET Core filters, and OpenFeature adapters all depend on this interface — never on the concrete `ExperimentClient`.
+**What it solves:** Defines the contract for flag evaluation independently of the engine implementation. Application code, ASP.NET Core filters, and OpenFeature adapters all depend on this interface; the concrete `ExperimentClient` is internal.
 
 **`GetVariantAsync` is canonical.** The typed helpers (`GetBoolAsync`, etc.) call it internally and unwrap `VariantResult.Value`. Use `GetVariantAsync` when you need the full result (eligibility, outsider status, variant name, how the variant was assigned in `Source`: `Hash`, `SubjectOverride` or `SegmentOverride`, and the experiment's `SubjectType`). Use the typed helpers for simple on/off flags with a typed payload.
 
@@ -250,7 +250,7 @@ services.AddKomento(o => o.EnableExposureStream = true)       // required
 ```
 
 **Contract:**
-- Calls are **sequential per sink** — `WriteAsync` is never called concurrently for the same sink, so no locking is needed.
+- Calls are **sequential per sink**, so no locking is needed.
 - `ct` is cancelled when `WriteTimeout` elapses, or when shutdown gives up on the sink after `ShutdownFlushTimeout`. Pass it through.
 - **Throwing drops the batch.** It is logged and counted in `komento.exposures.sink.dropped` (`reason=write_failed` or `write_timeout`), and later batches still arrive. Retrying belongs inside the sink.
 - Every registered sink receives every exposure.

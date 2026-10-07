@@ -27,7 +27,7 @@ builder.Services.AddOpenTelemetry()
 
 ## Traces
 
-Each exposure is also recorded as a `feature_flag.evaluation` event on `Activity.Current` (for example the ASP.NET Core request span), following the [OpenTelemetry feature-flag convention](https://opentelemetry.io/docs/specs/semconv/feature-flags/feature-flags-events/). That ties "which variant did this request get" to the rest of the trace, with no extra setup. Nothing is recorded when there is no active trace, or it is not being sampled.
+Each exposure is also recorded as a `feature_flag.evaluation` event on `Activity.Current` (for example the ASP.NET Core request span), following the [OpenTelemetry feature-flag convention](https://opentelemetry.io/docs/specs/semconv/feature-flags/feature-flags-events/). That ties "which variant did this request get" to the rest of the trace, with no extra setup. The event is recorded whenever a trace is active and sampled.
 
 | Tag | Value |
 |---|---|

@@ -40,7 +40,7 @@ Nothing is de-duplicated: every evaluation is an exposure, so a subject has many
 
 `ConfigRevision` is a short fingerprint of the experiment's definition: id, subject type, variants and allocations, filters and overrides. Equal definitions give equal revisions, in any process. It changes when the definition changes, so you can tell exposures that ran under different rules apart. For example, group by `(FlagKey, ConfigRevision)` before comparing variants, or discard the exposures from before an allocation was edited.
 
-Segment membership is not part of the definition. A config that says "segment `beta-users` gets `treatment`" keeps its revision when someone joins `beta-users` in the segment store. To analyze membership changes, use the exposure's `Timestamp`.
+The definition holds the rules; segment membership lives in the segment store. A config that says "segment `beta-users` gets `treatment`" keeps its revision when someone joins `beta-users`. To analyze membership changes, use the exposure's `Timestamp`.
 
 ### Reading the stream directly
 
@@ -121,7 +121,7 @@ To say whether a variant "won", join exposures with conversions on the subject:
 Things that commonly break the analysis:
 
 - **The subject ID must match.** Conversions must use the same ID you passed to `GetVariantAsync` (with ASP.NET Core, the value your `ISubjectProvider` returns). Anonymous-to-logged-in ID changes break the join. When subjects come in more than one kind, use `SubjectType` on the exposure and add a `subjectType` attribute to the context you pass to `Track`, so you can join on both.
-- **Evaluate at the point of use.** An evaluation counts as an exposure even if the user never saw the feature. Evaluate where the user would actually see the variant, not at startup.
+- **Evaluate at the point of use.** An evaluation counts as an exposure even if the user never saw the feature. Evaluate where the user would actually see the variant.
 - **Dropped events bias results.** Check the drop counters before trusting numbers.
 
 Compute significance in your analytics tool or with a stats library, on the joined data.

@@ -7,7 +7,7 @@ Key mechanisms:
 - `FrozenDictionary<string, CompiledExperiment>`: the experiment map, with lock-free reads.
 - `ArrayPool<byte>`: the XxHash64 input buffer, so no heap allocation per hash.
 - `ValueTask<T>`: synchronous results wrapped without a `Task` allocation.
-- `in EvaluationContext`: the struct is passed by reference, never copied.
+- `in EvaluationContext`: the struct is passed by reference.
 - No LINQ and no closures in any hot-path method.
 
 Config updates (`UpdateAsync`) are the only write operation. They compare each incoming config with the one held, compile what changed into a new `FrozenDictionary` and atomically swap the reference. In-flight reads are unaffected.

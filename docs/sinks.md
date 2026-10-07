@@ -24,10 +24,10 @@ public sealed class HttpExposureSink(IHttpClientFactory httpClientFactory) : IEx
 
 Rules for sinks:
 
-- `WriteAsync` is never called concurrently for the same sink, so you don't need locking.
+- `WriteAsync` calls are sequential per sink, so no locking is needed.
 - Pass `ct` through. It is cancelled when `WriteTimeout` elapses, or when shutdown gives up on the sink after `ShutdownFlushTimeout`.
 - If it throws or times out, that batch is dropped and later batches still arrive. Do any retrying inside the sink.
-- The sink is created once as a singleton from the root service provider, so it can't depend on scoped services.
+- The sink is created once as a singleton from the root service provider, so it depends on singleton or transient services.
 
 **2. Register it.** Enable the stream and add the sink wherever you call `AddKomento`:
 
