@@ -10,6 +10,7 @@ using Komento.Internals;
 public class ExperimentClientBenchmarks
 {
     private ExperimentClient _client = null!;
+    private ExperimentClient _staticContextClient = null!;
     private EvaluationContext _emptyCtx;
     private EvaluationContext _traitCtx;
 
@@ -58,6 +59,13 @@ public class ExperimentClientBenchmarks
 
         await _client.UpdateAsync(configs);
 
+        // Same experiments, but the "platform" attribute comes from KomentoOptions.StaticContext.
+        _staticContextClient = new ExperimentClient(new KomentoOptions
+        {
+            StaticContext = EvaluationContext.Create().Set("platform", "web").Build()
+        });
+        await _staticContextClient.UpdateAsync(configs);
+
         _emptyCtx = EvaluationContext.Create().Build();
         _traitCtx = EvaluationContext.Create().Set("platform", "web").Build();
     }
@@ -73,6 +81,14 @@ public class ExperimentClientBenchmarks
     [Benchmark]
     public ValueTask<VariantResult> GetVariant_TraitFilter() =>
         _client.GetVariantAsync(TraitFlag, SubjectId, _traitCtx);
+
+    /// <summary>
+    /// TraitEqualsFilter satisfied from <c>KomentoOptions.StaticContext</c> (per-call context is empty).
+    /// The fallback is a second lookup, not a merged copy — must allocate 0 bytes.
+    /// </summary>
+    [Benchmark]
+    public ValueTask<VariantResult> GetVariant_TraitFilter_FromStaticContext() =>
+        _staticContextClient.GetVariantAsync(TraitFlag, SubjectId, _emptyCtx);
 
     /// <summary>Experiment not registered — immediate FrozenDictionary miss. Must allocate 0 bytes.</summary>
     [Benchmark]
