@@ -8,27 +8,32 @@ namespace Komento.Sinks;
 /// One sink's isolated pipeline: batching, a bounded queue of pending batches, and a sequential
 /// consumer. A slow sink fills only its own queue; the producer side never blocks.
 /// </summary>
-internal sealed class SinkPipeline
+internal sealed class SinkPipeline<TEvent>
 {
-    private readonly string                 _name;
-    private readonly ILogger                _logger;
-    private readonly TimeProvider           _timeProvider;
-    private readonly Subject<ExposureEvent> _input = new();
-    private readonly Channel<ExposureEvent[]> _pending;
-    private readonly IDisposable            _batching;
-    private readonly Task                   _consumer;
+    private readonly string                  _name;
+    private readonly string                  _kind;
+    private readonly SinkMetrics             _metrics;
+    private readonly ILogger                 _logger;
+    private readonly TimeProvider            _timeProvider;
+    private readonly SinkOptions             _options;
+    private readonly Subject<TEvent>         _input = new();
+    private readonly Channel<TEvent[]>       _pending;
+    private readonly IDisposable             _batching;
+    private readonly Task                    _consumer;
     private readonly CancellationTokenSource _cts = new();
-    private readonly ExposureSinkOptions    _options;
 
     public SinkPipeline(
-        string name, ExposureSinkRegistration registration, SinkWrite write, TimeProvider timeProvider, ILogger logger)
+        string name, SinkOptions options, SinkWrite<TEvent> write, SinkMetrics metrics, string kind,
+        TimeProvider timeProvider, ILogger logger)
     {
         _name         = name;
+        _kind         = kind;
+        _options      = options;
+        _metrics      = metrics;
         _logger       = logger;
         _timeProvider = timeProvider;
-        var options = _options = registration.Options;
 
-        _pending = Channel.CreateBounded<ExposureEvent[]>(new BoundedChannelOptions(options.MaxPendingBatches)
+        _pending = Channel.CreateBounded<TEvent[]>(new BoundedChannelOptions(options.MaxPendingBatches)
         {
             FullMode     = BoundedChannelFullMode.Wait,
             SingleReader = true
@@ -41,20 +46,20 @@ internal sealed class SinkPipeline
         _consumer = Task.Run(() => ConsumeAsync(write, _cts.Token), CancellationToken.None);
     }
 
-    public void Publish(ExposureEvent exposure) => _input.OnNext(exposure);
+    public void Publish(TEvent evt) => _input.OnNext(evt);
 
-    private void OnBatch(ExposureEvent[] batch)
+    private void OnBatch(TEvent[] batch)
     {
         if (!_pending.Writer.TryWrite(batch))
             RecordDropped(batch.Length, "queue_full");
     }
 
     private void RecordDropped(int count, string reason)
-        => ExposureSinkMetrics.Dropped.Add(count,
+        => _metrics.Dropped.Add(count,
             new KeyValuePair<string, object?>("sink", _name),
             new KeyValuePair<string, object?>("reason", reason));
 
-    private async Task ConsumeAsync(SinkWrite write, CancellationToken ct)
+    private async Task ConsumeAsync(SinkWrite<TEvent> write, CancellationToken ct)
     {
         try
         {
@@ -64,7 +69,7 @@ internal sealed class SinkPipeline
         catch (OperationCanceledException) { }
     }
 
-    private async Task WriteAsync(SinkWrite write, ExposureEvent[] batch, CancellationToken ct)
+    private async Task WriteAsync(SinkWrite<TEvent> write, TEvent[] batch, CancellationToken ct)
     {
         using var timeout = new CancellationTokenSource(_options.WriteTimeout, _timeProvider);
         using var linked  = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
@@ -74,18 +79,18 @@ internal sealed class SinkPipeline
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            _logger.LogWarning("Exposure sink {Sink} timed out writing {Count} exposures; batch dropped.", _name, batch.Length);
+            _logger.LogWarning("Sink {Sink} timed out writing {Count} {Kind}; batch dropped.", _name, batch.Length, _kind);
             RecordDropped(batch.Length, "write_timeout");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Exposure sink {Sink} failed writing {Count} exposures; batch dropped.", _name, batch.Length);
+            _logger.LogError(ex, "Sink {Sink} failed writing {Count} {Kind}; batch dropped.", _name, batch.Length, _kind);
             RecordDropped(batch.Length, "write_failed");
         }
     }
 
     /// <summary>
-    /// Flushes the partial batch and waits up to <see cref="ExposureSinkOptions.ShutdownFlushTimeout"/>
+    /// Flushes the partial batch and waits up to <see cref="SinkOptions.ShutdownFlushTimeout"/>
     /// for pending batches to be written, then cancels whatever is still running.
     /// </summary>
     public async Task StopAsync()
@@ -98,8 +103,8 @@ internal sealed class SinkPipeline
         }
         catch (TimeoutException)
         {
-            _logger.LogWarning("Exposure sink {Sink} did not flush within {Timeout}; abandoning pending exposures.",
-                _name, _options.ShutdownFlushTimeout);
+            _logger.LogWarning("Sink {Sink} did not flush within {Timeout}; abandoning pending {Kind}.",
+                _name, _options.ShutdownFlushTimeout, _kind);
             _cts.Cancel();
         }
         finally
