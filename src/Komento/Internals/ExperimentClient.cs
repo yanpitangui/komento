@@ -170,7 +170,7 @@ internal sealed class ExperimentClient
             if (overrides[i] is SubjectOverride so &&
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
-                var r = MakeResult(so.Variant, exp, isEligible: true, isOutsider: false);
+                var r = MakeResult(so.Variant, exp, AssignmentSource.SubjectOverride);
                 FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
@@ -184,8 +184,9 @@ internal sealed class ExperimentClient
                 !(TryGetAttribute(in ctx, tf.Key, out var val) &&
                   string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
             {
-                FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
-                return VariantResult.Ineligible;
+                var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
+                FireExposure(flagKey, subjectId, exp, ineligible);
+                return ineligible;
             }
         }
 
@@ -203,7 +204,7 @@ internal sealed class ExperimentClient
             if (overrides[i] is SubjectOverride so &&
                 string.Equals(so.SubjectId, subjectId, StringComparison.Ordinal))
             {
-                var r = MakeResult(so.Variant, exp, isEligible: true, isOutsider: false);
+                var r = MakeResult(so.Variant, exp, AssignmentSource.SubjectOverride);
                 FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
@@ -219,8 +220,9 @@ internal sealed class ExperimentClient
                     if (!(TryGetAttribute(in ctx, tf.Key, out var val) &&
                           string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
                     {
-                        FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
-                        return VariantResult.Ineligible;
+                        var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
+                        FireExposure(flagKey, subjectId, exp, ineligible);
+                        return ineligible;
                     }
                     break;
 
@@ -228,8 +230,9 @@ internal sealed class ExperimentClient
                     if (_segmentProvider is null ||
                         !await _segmentProvider.IsInSegmentAsync(subjectId, sf.Segment, ct))
                     {
-                        FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
-                        return VariantResult.Ineligible;
+                        var ineligible = VariantResult.Ineligible with { SubjectType = exp.SubjectType };
+                        FireExposure(flagKey, subjectId, exp, ineligible);
+                        return ineligible;
                     }
                     break;
             }
@@ -242,7 +245,7 @@ internal sealed class ExperimentClient
                 _segmentProvider is not null &&
                 await _segmentProvider.IsInSegmentAsync(subjectId, segOvr.Segment, ct))
             {
-                var r = MakeResult(segOvr.Variant, exp, isEligible: true, isOutsider: false);
+                var r = MakeResult(segOvr.Variant, exp, AssignmentSource.SegmentOverride);
                 FireExposure(flagKey, subjectId, exp, r);
                 return r;
             }
@@ -268,6 +271,8 @@ internal sealed class ExperimentClient
                         VariantName = variants[i].Name,
                         Value       = variants[i].Value,
                         IsEligible  = true,
+                        Source      = AssignmentSource.Hash,
+                        SubjectType = exp.SubjectType
                     };
                     FireExposure(flagKey, subjectId, exp, r);
                     return r;
@@ -275,7 +280,7 @@ internal sealed class ExperimentClient
             }
         }
 
-        var outsider = VariantResult.Outsider();
+        var outsider = VariantResult.Outsider() with { SubjectType = exp.SubjectType };
         FireExposure(flagKey, subjectId, exp, outsider);
         return outsider;
     }
@@ -383,7 +388,7 @@ internal sealed class ExperimentClient
     }
 
     private static VariantResult MakeResult(
-        string variantName, CompiledExperiment exp, bool isEligible, bool isOutsider)
+        string variantName, CompiledExperiment exp, AssignmentSource source)
     {
         object? value = null;
         for (var i = 0; i < exp.Variants.Length; i++)
@@ -394,8 +399,10 @@ internal sealed class ExperimentClient
         {
             VariantName = variantName,
             Value       = value,
-            IsEligible  = isEligible,
-            IsOutsider  = isOutsider
+            IsEligible  = true,
+            IsOutsider  = false,
+            Source      = source,
+            SubjectType = exp.SubjectType
         };
     }
 

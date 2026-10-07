@@ -1,11 +1,33 @@
 namespace Komento;
 
+/// <summary>How a subject came to be assigned a variant.</summary>
+public enum AssignmentSource
+{
+    /// <summary>No assignment: not found, ineligible, or outside every allocation.</summary>
+    None,
+
+    /// <summary>The subject's hash fell inside the variant's allocation.</summary>
+    Hash,
+
+    /// <summary>An override rule for this specific subject chose the variant.</summary>
+    SubjectOverride,
+
+    /// <summary>An override rule for a segment the subject belongs to chose the variant.</summary>
+    SegmentOverride
+}
+
 public readonly struct VariantResult : IEquatable<VariantResult>
 {
     public string  VariantName { get; init; }
     public object? Value       { get; init; }
     public bool    IsEligible  { get; init; }
     public bool    IsOutsider  { get; init; }
+
+    /// <summary>How the variant was assigned. Not part of equality.</summary>
+    public AssignmentSource Source { get; init; }
+
+    /// <summary>The experiment's subject type; null when the experiment was not found. Not part of equality.</summary>
+    public string? SubjectType { get; init; }
 
     /// <summary>Returned when the experiment does not exist. Value-equal to <see cref="Ineligible"/> by design — both result in control behavior.</summary>
     public static readonly VariantResult NotFound = new()
