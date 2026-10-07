@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Komento;
+using Komento.Sample.Contracts;
 using Komento.Sample.ServiceDefaults;
+using Microsoft.AspNetCore.Http.HttpResults;
 using NATS.Client.Core;
 using NATS.Client.KeyValueStore;
 using NATS.Net;
@@ -98,6 +100,38 @@ app.MapPost("/vip/{userId}", async (string userId, NpgsqlDataSource db, Cancella
     cmd.Parameters.AddWithValue(userId);
     await cmd.ExecuteNonQueryAsync(ct);
     return Results.Created($"/vip/{userId}", null);
+});
+
+// ── Exposure endpoints ────────────────────────────────────────────────────
+
+app.MapGet("/exposures", async Task<Results<Ok<IReadOnlyList<ExposureResponse>>, ValidationProblem>> (
+    string subjectId, NpgsqlDataSource db, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(subjectId))
+        return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+        {
+            [nameof(subjectId)] = ["subjectId is required."]
+        });
+
+    await using var conn = await db.OpenConnectionAsync(ct);
+    await using var cmd  = new NpgsqlCommand(
+        "SELECT experiment, subject_id, subject_type, variant, is_eligible, is_outsider, exposed_at " +
+        "FROM exposures WHERE subject_id = $1 ORDER BY exposed_at DESC, id DESC LIMIT 100", conn);
+    cmd.Parameters.AddWithValue(subjectId);
+    await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+    var exposures = new List<ExposureResponse>();
+    while (await reader.ReadAsync(ct))
+        exposures.Add(new ExposureResponse(
+            Experiment:  reader.GetString(0),
+            SubjectId:   reader.GetString(1),
+            SubjectType: reader.GetString(2),
+            Variant:     reader.GetString(3),
+            IsEligible:  reader.GetBoolean(4),
+            IsOutsider:  reader.GetBoolean(5),
+            ExposedAt:   reader.GetFieldValue<DateTimeOffset>(6)));
+
+    return TypedResults.Ok<IReadOnlyList<ExposureResponse>>(exposures);
 });
 
 app.Run();
