@@ -1,6 +1,6 @@
 # Extension Points
 
-Komento is designed around six public interfaces. Each covers one seam in the evaluation pipeline. This document explains why each exists and what problem it is meant to solve — intended as a reference for deciding which implementations to build.
+Komento is designed around eight public interfaces. Each covers one seam: six in the evaluation pipeline, and two for getting exposure data out of it. This document explains why each exists and what problem it is meant to solve — intended as a reference for deciding which implementations to build.
 
 ---
 
@@ -19,7 +19,7 @@ public interface IExperimentSource
 
 **What it solves:** Decouples config storage from the evaluation engine. The engine does not know or care whether configs live in a JSON file, a database row, an HTTP response, or a message queue payload.
 
-**`experimentIds` parameter:** The source receives the set of experiment IDs this service declared in `KomentoOptions.Experiments`. It should only return configs for those IDs — filtering server-side where possible avoids pulling the entire experiment catalogue.
+**`experimentIds` parameter:** The set of experiment IDs the caller wants. **An empty set means "all experiments"** — that is what `InitializeKomentoAsync` passes. A non-empty set (for example one given to the polling service) asks for only those IDs; filtering server-side where possible avoids pulling the entire experiment catalogue.
 
 **Production notes:**
 - The built-in `AppSettingsExperimentSource` reads from `IConfiguration`. This is suitable for local development and integration tests only.
@@ -33,8 +33,7 @@ public interface IExperimentSource
 ```csharp
 public interface IConfigUpdater
 {
-    IReadOnlySet<string> RelevantExperimentIds { get; }
-
+    ValueTask UpdateAsync(IReadOnlyDictionary<string, ExperimentConfig> configs, IReadOnlySet<string> experimentIds, CancellationToken ct = default);
     ValueTask UpdateAsync(IReadOnlyDictionary<string, ExperimentConfig> configs, CancellationToken ct = default);
     ValueTask UpdateAsync(ExperimentConfig config, CancellationToken ct = default);
     ValueTask RemoveAsync(string experimentId, CancellationToken ct = default);
@@ -45,7 +44,7 @@ public interface IConfigUpdater
 
 **What it solves:** Enables hot reload. The engine (`ExperimentClient`) implements this interface. External systems — polling services, message consumers, webhook handlers — inject `IConfigUpdater` and call `UpdateAsync` when they detect a change.
 
-**`RelevantExperimentIds`:** Returns the set declared in `KomentoOptions.Experiments`. Callers (Kafka consumers, Redis subscribers, etc.) should filter incoming change events against this set before calling `UpdateAsync`, so the engine never processes changes for experiments it doesn't run.
+**`experimentIds` overload:** Passing a non-empty set loads only the configs whose ID is in the set; an empty set (or the overload without the parameter) loads everything in `configs`. Use it when a feed carries more experiments than this service runs, so the engine never compiles configs it doesn't need.
 
 **Atomicity:** Each `UpdateAsync` call builds a new `FrozenDictionary` and atomically swaps the reference. In-flight evaluations finish against the previous config; all subsequent calls see the new one. There is no lock contention on the read path.
 
@@ -158,3 +157,86 @@ public interface IExperimentClient
 - The concrete engine is registered as a singleton under both `IExperimentClient` and `IConfigUpdater`. All application code should inject `IExperimentClient` only.
 - In unit tests, stub or mock `IExperimentClient` to force specific variants without running the real engine. The interface is simple enough that a hand-written stub is usually cleaner than a mock.
 - `GetVariantAsync` is allocation-free on the synchronous fast path (no segment operations). It allocates only when a truly async segment provider is involved.
+
+---
+
+## `IExposureStream`
+
+```csharp
+public interface IExposureStream
+{
+    ChannelReader<ExposureEvent> Reader { get; }
+}
+
+public readonly struct ExposureEvent
+{
+    public string?        FlagKey     { get; init; }
+    public string?        SubjectId   { get; init; }
+    public string?        SubjectType { get; init; }
+    public string?        VariantName { get; init; }
+    public bool           IsEligible  { get; init; }
+    public bool           IsOutsider  { get; init; }
+    public DateTimeOffset Timestamp   { get; init; }
+}
+```
+
+**Why it exists:** To tell whether a variant won you need to know who was assigned to which one. Every evaluation is an *exposure*, and the engine has to hand that record to something outside the process without slowing evaluation down.
+
+**What it solves:** Gets exposure data out of the hot path. The engine writes each exposure to a bounded channel with a non-blocking `TryWrite`; whatever reads `Reader` runs on its own schedule. If the channel is full the exposure is dropped and counted in `komento.exposures.dropped` — evaluation never waits on a consumer.
+
+**Opt-in:** Off by default. Set `KomentoOptions.EnableExposureStream = true`. With it off, nothing is buffered (a channel with no reader would only fill up and drop), and reading `Reader` throws an `InvalidOperationException` that names the option.
+
+**Single reader.** A channel has one logical consumer. To fan out to several destinations, use `Komento.Exposure` (below) rather than reading the stream from several places.
+
+**Fields worth knowing:**
+- `SubjectType` says which kind of ID `SubjectId` holds (`"user"`, `"device"`, ...). Only join exposures with conversion events keyed on the same kind of ID.
+- Outsiders (`IsOutsider`) and ineligible subjects (`!IsEligible`) are recorded too, with `VariantName == "control"`. Filter them out when analyzing.
+- Nothing is de-duplicated: every evaluation is an exposure. Analysis normally takes the first exposure per subject and experiment.
+
+**Production notes:**
+- Capacity is `KomentoOptions.ExposureChannelCapacity` (default 4096). Size it for bursts, and alert on `komento.exposures.dropped`: if it is non-zero, the data is incomplete and any analysis of it is biased.
+- Reading it directly (`await foreach (var e in stream.Reader.ReadAllAsync(ct))`) is right when you already have a pipeline to push into. Otherwise prefer `IExposureSink`.
+
+---
+
+## `IExposureSink` *(Komento.Exposure)*
+
+```csharp
+public interface IExposureSink
+{
+    ValueTask WriteAsync(IReadOnlyList<ExposureEvent> batch, CancellationToken ct);
+}
+```
+
+**Why it exists:** Most destinations (a warehouse, an events service, a message queue) want batches, and every one needs the same plumbing: batching by size and time, a bounded buffer, a timeout, error handling, and a flush on shutdown. You should only write the part that is specific to your destination.
+
+**What it solves:** `Komento.Exposure` reads `IExposureStream` once and runs each registered sink in its own isolated pipeline: its own bounded queue of batches, its own timeout, and a sequential consumer. A slow or failing sink affects only itself — other sinks and evaluation carry on.
+
+```csharp
+services.AddKomento(o => o.EnableExposureStream = true)       // required
+        .AddExposureSink<MySink>(o => o.BatchSize = 200)      // resolved from DI as a singleton
+        .AddLoggingExposureSink();                            // built in: one structured log entry per exposure
+```
+
+**Contract:**
+- Calls are **sequential per sink** — `WriteAsync` is never called concurrently for the same sink, so no locking is needed.
+- `ct` is cancelled when `WriteTimeout` elapses, or when shutdown gives up on the sink after `ShutdownFlushTimeout`. Pass it through.
+- **Throwing drops the batch.** It is logged and counted in `komento.exposures.sink.dropped` (`reason=write_failed` or `write_timeout`), and later batches still arrive. Retrying belongs inside the sink.
+- Every registered sink receives every exposure.
+
+**Production notes:**
+- A sink is created once, as a singleton, from the root service provider, so it must not depend on scoped services.
+- Options per sink: `Name`, `BatchSize`, `FlushInterval`, `MaxPendingBatches`, `WriteTimeout`, `ShutdownFlushTimeout`. When a sink falls behind, its queue fills and further batches are dropped for that sink only (`reason=queue_full`).
+- On shutdown each sink gets `ShutdownFlushTimeout` to write what is pending, then is abandoned. A sink that ignores its token and blocks forever cannot be killed; it fills its queue, then drops. Watch the drop counters.
+- Requires `Komento.Exposure` and `EnableExposureStream`. The host fails at startup with a clear message if the stream is not enabled. The README's "Exposures and metrics" section has a worked example.
+
+---
+
+## Exposure telemetry that needs no extension point
+
+Two outputs are built in and need no implementation from you:
+
+- **Metrics.** A `System.Diagnostics.Metrics` meter named `Komento` (`komento.exposures`, tagged by `experiment`, `variant` and `outcome`, and `komento.exposures.dropped`). Always on. Tags carry only bounded values, which keeps metric cardinality low; per-subject detail lives in the exposure stream and sinks. Export with `.AddMeter("Komento")`.
+- **Activity events.** When an `Activity` is current and recording (for example the ASP.NET Core request span), each exposure is added to it as a `feature_flag.evaluation` event following the OpenTelemetry feature-flag convention. On by default (`EmitActivityEvents`); the subject ID is included as `feature_flag.context.id` unless `IncludeSubjectIdInActivityEvents = false`.
+
+`ExposureEvent.Timestamp` (on the stream) comes from the registered `TimeProvider`, which tests can replace with a fake clock.
