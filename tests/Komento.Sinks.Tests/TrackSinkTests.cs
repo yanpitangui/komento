@@ -130,6 +130,36 @@ public class TrackSinkTests
     }
 
     [Test]
+    public async Task Exposure_and_track_sinks_can_run_side_by_side()
+    {
+        var exposures   = new TaskCompletionSource<IReadOnlyList<ExposureEvent>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var conversions = new TaskCompletionSource<IReadOnlyList<TrackEvent>>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var services = new ServiceCollection();
+        services.AddKomento(o => { o.EnableExposureStream = true; o.EnableTrackStream = true; })
+            .AddExposureSink((batch, _) => { exposures.TrySetResult(batch.ToArray()); return ValueTask.CompletedTask; },
+                o => { o.BatchSize = 1; o.FlushInterval = TimeSpan.FromHours(1); })
+            .AddTrackSink((batch, _) => { conversions.TrySetResult(batch.ToArray()); return ValueTask.CompletedTask; },
+                o => { o.BatchSize = 1; o.FlushInterval = TimeSpan.FromHours(1); });
+        await using var provider = services.BuildServiceProvider();
+        foreach (var hosted in provider.GetServices<IHostedService>())
+            await hosted.StartAsync(CancellationToken.None);
+
+        await provider.GetRequiredService<IConfigUpdater>().UpdateAsync(new ExperimentConfig
+        {
+            Id          = "side-by-side",
+            SubjectType = "user",
+            Variants    = [new VariantConfig { Name = "only", Allocation = 1.0 }]
+        });
+        await provider.GetRequiredService<IExperimentClient>()
+            .GetVariantAsync("side-by-side", "user-1", EvaluationContext.Empty);
+        provider.GetRequiredService<IExperimentTracker>().Track("purchase", "user-1");
+
+        (await exposures.Task.WaitAsync(Timeout)).Should().ContainSingle();
+        (await conversions.Task.WaitAsync(Timeout)).Should().ContainSingle();
+    }
+
+    [Test]
     public async Task Starting_without_the_track_stream_enabled_fails_with_a_clear_message()
     {
         var services = new ServiceCollection();

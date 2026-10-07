@@ -35,6 +35,21 @@ public sealed class ExposureTests(AppHostFixture fixture)
     }
 
     [Test]
+    public async Task Recommendations_through_OpenFeature_record_the_exposure_for_the_authenticated_user()
+    {
+        var userId = $"exposure-user-{Guid.NewGuid():N}";
+        var token  = await GetTokenAsync(userId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/recommendations");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        (await fixture.EcommerceClient.SendAsync(request)).EnsureSuccessStatusCode();
+
+        var exposures = await WaitForExposuresAsync(userId, expected: 1, TimeSpan.FromSeconds(30));
+
+        exposures.Should().ContainSingle(e => e.Experiment == "recommendation-algorithm" && e.SubjectId == userId);
+    }
+
+    [Test]
     public async Task Exposures_endpoint_rejects_a_blank_subject_id()
     {
         var response = await fixture.AdminClient.GetAsync("/exposures?subjectId=%20");

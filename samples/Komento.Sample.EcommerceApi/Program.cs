@@ -27,11 +27,18 @@ builder.AddNatsClient("nats");
 builder.AddNpgsqlDataSource("komento-db");
 
 // Komento core
-builder.Services.AddKomento(o => o.EnableExposureStream = true)
+builder.Services.AddKomento(o =>
+{
+    o.EnableExposureStream = true;
+    o.EnableTrackStream    = true;
+    o.StaticContext        = global::Komento.EvaluationContext.Create().Set("service", "ecommerce-api").Build();
+})
 .AddSource<NatsExperimentSource>()
 .AddSegmentProvider<AppSegmentProvider>()
 .AddExposureSink<PostgresExposureSink>(o => o.FlushInterval = TimeSpan.FromSeconds(1))
-.AddLoggingExposureSink();
+.AddLoggingExposureSink()
+.AddTrackSink<PostgresTrackSink>(o => o.FlushInterval = TimeSpan.FromSeconds(1))
+.AddLoggingTrackSink();
 
 // Komento.AspNetCore integration
 builder.Services.AddKomentoAspNetCore()
@@ -142,9 +149,10 @@ app.MapGet("/products/{id}", async (
 app.MapGet("/recommendations", async (
     HttpContext httpContext,
     IFeatureClient featureClient,
+    IEnumerable<ISubjectProvider> subjectProviders,
     CancellationToken ct) =>
 {
-    var subjectId = httpContext.User.FindFirst("sub")?.Value ?? "anonymous";
+    var subjectId = ResolveSubject(subjectProviders, httpContext);
     var plan      = httpContext.User.FindFirst("plan")?.Value ?? "free";
 
     var evalCtx = global::OpenFeature.Model.EvaluationContext.Builder()
@@ -161,4 +169,57 @@ app.MapGet("/recommendations", async (
     return TypedResults.Ok(new RecommendationsResponse(algo, items));
 }).RequireAuthorization();
 
+// ── POST /products/{id}/purchase — records a conversion with IExperimentTracker ──
+
+app.MapPost("/products/{id}/purchase", (
+    string id,
+    PurchaseRequest purchase,
+    HttpContext httpContext,
+    IExperimentTracker tracker,
+    IEnumerable<ISubjectProvider> subjectProviders) =>
+{
+    var subjectId = ResolveSubject(subjectProviders, httpContext);
+    var plan      = httpContext.User.FindFirst("plan")?.Value ?? "free";
+
+    var ctx = global::Komento.EvaluationContext.Create().Set("plan", plan).Build();
+    tracker.Track("purchase", subjectId, in ctx,
+        value: (double)purchase.Amount,
+        properties: new Dictionary<string, object?> { ["productId"] = id });
+
+    return TypedResults.Ok(new PurchaseResponse(id, purchase.Amount));
+}).RequireAuthorization();
+
+// ── POST /recommendations/clicks — records a conversion through OpenFeature's Track API ──
+
+app.MapPost("/recommendations/clicks", (
+    RecommendationClickRequest click,
+    HttpContext httpContext,
+    IFeatureClient featureClient,
+    IEnumerable<ISubjectProvider> subjectProviders) =>
+{
+    var subjectId = ResolveSubject(subjectProviders, httpContext);
+    var plan      = httpContext.User.FindFirst("plan")?.Value ?? "free";
+
+    var evalCtx = global::OpenFeature.Model.EvaluationContext.Builder()
+        .SetTargetingKey(subjectId)
+        .Set("plan", new Value(plan))
+        .Build();
+
+    featureClient.Track("recommendation-click", evalCtx,
+        TrackingEventDetails.Builder().Set("item", click.Item).Build());
+
+    return TypedResults.NoContent();
+}).RequireAuthorization();
+
 app.Run();
+
+// The subject comes from the registered ISubjectProvider (JwtSubjectProvider), not from a raw claim:
+// ASP.NET's JWT handler remaps the "sub" claim, so reading it directly would miss it.
+static string ResolveSubject(IEnumerable<ISubjectProvider> providers, HttpContext httpContext)
+{
+    foreach (var provider in providers)
+        if (provider.GetSubject(httpContext) is { } subject)
+            return subject;
+
+    return "anonymous";
+}
