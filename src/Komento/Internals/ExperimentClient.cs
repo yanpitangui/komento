@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
 namespace Komento.Internals;
@@ -10,6 +11,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         FrozenDictionary<string, CompiledExperiment>.Empty;
 
     private readonly ISegmentProvider?          _segmentProvider;
+    private readonly EvaluationContext          _staticContext;
     private readonly TimeProvider               _timeProvider;
     private readonly bool                       _emitActivityEvents;
     private readonly bool                       _includeSubjectIdInActivityEvents;
@@ -25,6 +27,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         TimeProvider?     timeProvider    = null)
     {
         _segmentProvider                  = segmentProvider;
+        _staticContext                    = options.StaticContext;
         _timeProvider                     = timeProvider ?? TimeProvider.System;
         _emitActivityEvents               = options.EmitActivityEvents;
         _includeSubjectIdInActivityEvents = options.IncludeSubjectIdInActivityEvents;
@@ -162,7 +165,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         for (var i = 0; i < filters.Length; i++)
         {
             if (filters[i] is TraitEqualsFilter tf &&
-                !(ctx.TryGetValue(tf.Key, out var val) &&
+                !(TryGetAttribute(in ctx, tf.Key, out var val) &&
                   string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
             {
                 FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
@@ -197,7 +200,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
             switch (filters[i])
             {
                 case TraitEqualsFilter tf:
-                    if (!(ctx.TryGetValue(tf.Key, out var val) &&
+                    if (!(TryGetAttribute(in ctx, tf.Key, out var val) &&
                           string.Equals(val?.ToString(), tf.Value, StringComparison.Ordinal)))
                     {
                         FireExposure(flagKey, subjectId, exp, VariantResult.Ineligible);
@@ -302,6 +305,13 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Looks an attribute up in the per-call context first, then in <see cref="KomentoOptions.StaticContext"/>,
+    /// so per-call values take precedence. A lookup in each (no merged copy) keeps evaluation allocation-free.
+    /// </summary>
+    private bool TryGetAttribute(in EvaluationContext ctx, string key, [NotNullWhen(true)] out object? value)
+        => ctx.TryGetValue(key, out value) || _staticContext.TryGetValue(key, out value);
 
     private static bool HasSegmentOperations(CompiledExperiment exp)
     {

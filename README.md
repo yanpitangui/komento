@@ -564,7 +564,7 @@ var extended = EvaluationContextBuilder.CreateFrom(baseCtx)
     .Build();
 ```
 
-Attributes set via `KomentoOptions.StaticContext` are merged automatically in `Komento.AspNetCore` before each evaluation. Request-level attributes from enrichers layer on top.
+Attributes set via `KomentoOptions.StaticContext` apply to every evaluation, whichever way it is made: `IExperimentClient` directly, the ASP.NET Core filters, or the OpenFeature provider. They sit at the lowest precedence: an attribute passed with the call (from enrichers, or the OpenFeature evaluation context) takes precedence over a static attribute of the same name.
 
 ---
 

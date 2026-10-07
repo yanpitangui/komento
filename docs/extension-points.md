@@ -122,7 +122,7 @@ public interface IEvaluationContextEnricher
 **Production notes:**
 - Fast, synchronous enrichers (reading from already-parsed JWT claims, from headers) should return `ValueTask.CompletedTask`.
 - Async enrichers (calling Redis for a profile, calling a feature store) are supported but add latency to every gated request. Cache aggressively.
-- The static context set in `KomentoOptions.StaticContext` (region, service name, environment) is merged first. Enricher attributes layer on top.
+- The static context set in `KomentoOptions.StaticContext` (region, service name, environment) is applied by the engine to every evaluation, at the lowest precedence. Enricher attributes take precedence over a static attribute of the same name.
 - Think of enrichers as the assembly point for "what do we know about this request that experiments might filter on?"
 
 ---
