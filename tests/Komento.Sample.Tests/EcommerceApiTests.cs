@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
 using AwesomeAssertions;
+using Komento.Sample.Contracts;
 using TUnit.Core;
 
 namespace Komento.Sample.Tests;
@@ -18,8 +18,8 @@ public sealed class EcommerceApiTests(AppHostFixture fixture)
         var response = await fixture.EcommerceClient.GetAsync("/token?userId=alice");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("token").GetString().Should().NotBeNullOrEmpty();
+        var body = await response.Content.ReadFromJsonAsync<TokenResponse>();
+        body!.Token.Should().NotBeNullOrEmpty();
     }
 
     // ── Authorization ──────────────────────────────────────────────────────
@@ -44,33 +44,33 @@ public sealed class EcommerceApiTests(AppHostFixture fixture)
     public async Task GetProduct_AsRegularUser_ReturnsDefaultPrice()
     {
         // "nobody" is neither VIP nor loyalty — price-display filters them out
-        var token = await GetTokenAsync("nobody");
-        var body  = await GetProductAsync("42", token);
+        var token   = await GetTokenAsync("nobody");
+        var product = await GetProductAsync("42", token);
 
-        body.GetProperty("priceVariant").GetString().Should().Be("default");
-        body.GetProperty("price").GetDecimal().Should().Be(99.99m);
+        product.PriceVariant.Should().Be("default");
+        product.Price.Should().Be(99.99m);
     }
 
     [Test]
     public async Task GetProduct_AsVipOnlyUser_ReturnsVipPrice()
     {
         // user-3 is seeded as VIP (postgres) but not loyalty
-        var token = await GetTokenAsync("user-3");
-        var body  = await GetProductAsync("1", token);
+        var token   = await GetTokenAsync("user-3");
+        var product = await GetProductAsync("1", token);
 
-        body.GetProperty("priceVariant").GetString().Should().Be("vip-price");
-        body.GetProperty("price").GetDecimal().Should().Be(89.99m);
+        product.PriceVariant.Should().Be("vip-price");
+        product.Price.Should().Be(89.99m);
     }
 
     [Test]
     public async Task GetProduct_AsVipAndLoyaltyUser_ReturnsLoyaltyPrice()
     {
         // user-1 is seeded as both VIP (postgres) and loyalty (NATS KV)
-        var token = await GetTokenAsync("user-1");
-        var body  = await GetProductAsync("1", token);
+        var token   = await GetTokenAsync("user-1");
+        var product = await GetProductAsync("1", token);
 
-        body.GetProperty("priceVariant").GetString().Should().Be("loyalty-price");
-        body.GetProperty("price").GetDecimal().Should().Be(79.99m);
+        product.PriceVariant.Should().Be("loyalty-price");
+        product.Price.Should().Be(79.99m);
     }
 
     // ── premium-product-page experiment ───────────────────────────────────
@@ -78,19 +78,19 @@ public sealed class EcommerceApiTests(AppHostFixture fixture)
     [Test]
     public async Task GetProduct_AsFreeTierUser_ReturnsNoPremiumPage()
     {
-        var token = await GetTokenAsync("alice", plan: "free");
-        var body  = await GetProductAsync("42", token);
+        var token   = await GetTokenAsync("alice", plan: "free");
+        var product = await GetProductAsync("42", token);
 
-        body.GetProperty("premiumPage").GetBoolean().Should().BeFalse();
+        product.PremiumPage.Should().BeFalse();
     }
 
     [Test]
     public async Task GetProduct_AsPremiumUser_ReturnsPremiumPage()
     {
-        var token = await GetTokenAsync("alice", plan: "premium");
-        var body  = await GetProductAsync("42", token);
+        var token   = await GetTokenAsync("alice", plan: "premium");
+        var product = await GetProductAsync("42", token);
 
-        body.GetProperty("premiumPage").GetBoolean().Should().BeTrue();
+        product.PremiumPage.Should().BeTrue();
     }
 
     // ── recommendation-algorithm experiment (OpenFeature) ─────────────────
@@ -102,9 +102,9 @@ public sealed class EcommerceApiTests(AppHostFixture fixture)
         var response = await AuthGet("/recommendations", token);
 
         response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("algorithm").GetString()
-            .Should().BeOneOf("collaborative", "content-based");
+        var recommendations = await response.Content.ReadFromJsonAsync<RecommendationsResponse>();
+        recommendations!.Algorithm.Should().BeOneOf("collaborative", "content-based");
+        recommendations.Items.Should().HaveCount(3);
     }
 
     // ── Admin → EcommerceApi propagation ──────────────────────────────────
@@ -119,10 +119,10 @@ public sealed class EcommerceApiTests(AppHostFixture fixture)
         putResponse.EnsureSuccessStatusCode();
 
         // NatsLoyaltyStore does a point-GET per request — immediately consistent
-        var token = await GetTokenAsync(userId);
-        var body  = await GetProductAsync("1", token);
+        var token   = await GetTokenAsync(userId);
+        var product = await GetProductAsync("1", token);
 
-        body.GetProperty("priceVariant").GetString().Should().Be("loyalty-price");
+        product.PriceVariant.Should().Be("loyalty-price");
 
         // Clean up
         await fixture.AdminClient.DeleteAsync($"/loyalty/{userId}");
@@ -133,17 +133,17 @@ public sealed class EcommerceApiTests(AppHostFixture fixture)
     private async Task<string> GetTokenAsync(string userId, string plan = "free")
     {
         var response = await fixture.EcommerceClient
-            .GetAsync($"/token?userId={userId}&plan={plan}");
+            .GetAsync($"/token?userId={Uri.EscapeDataString(userId)}&plan={Uri.EscapeDataString(plan)}");
         response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return body.GetProperty("token").GetString()!;
+        var body = await response.Content.ReadFromJsonAsync<TokenResponse>();
+        return body!.Token;
     }
 
-    private async Task<JsonElement> GetProductAsync(string productId, string token)
+    private async Task<ProductResponse> GetProductAsync(string productId, string token)
     {
         var response = await AuthGet($"/products/{productId}", token);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
+        return (await response.Content.ReadFromJsonAsync<ProductResponse>())!;
     }
 
     private Task<HttpResponseMessage> AuthGet(string path, string token)

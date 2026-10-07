@@ -4,10 +4,12 @@ using System.Text;
 using Komento;
 using Komento.AspNetCore;
 using Komento.OpenFeature;
+using Komento.Sample.Contracts;
 using Komento.Sample.EcommerceApi.Infrastructure;
 using Komento.Sample.EcommerceApi.Komento;
 using Komento.Sample.ServiceDefaults;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using OpenFeature;
 using OpenFeature.Model;
@@ -18,6 +20,7 @@ const string JwtSecret   = "komento-sample-secret-key-must-be-at-least-32-chars!
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+builder.Services.TryAddSingleton(TimeProvider.System);
 
 // Aspire-managed infrastructure
 builder.AddNatsClient("nats");
@@ -76,7 +79,7 @@ app.UseAuthorization();
 
 // ── /token — issue a demo JWT (no auth required) ──────────────────────────
 
-app.MapGet("/token", (string userId, string plan = "free") =>
+app.MapGet("/token", (string userId, TimeProvider time, string plan = "free") =>
 {
     var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
     var claims = new[]
@@ -88,10 +91,10 @@ app.MapGet("/token", (string userId, string plan = "free") =>
         issuer:             JwtIssuer,
         audience:           JwtAudience,
         claims:             claims,
-        expires:            DateTime.UtcNow.AddHours(1),
+        expires:            time.GetUtcNow().UtcDateTime.AddHours(1),
         signingCredentials: credentials);
 
-    return Results.Ok(new { token = new JwtSecurityTokenHandler().WriteToken(token) });
+    return TypedResults.Ok(new TokenResponse(new JwtSecurityTokenHandler().WriteToken(token)));
 });
 
 // ── /products/{id} — uses IExperimentClient + AspNetCore extension points ─
@@ -119,19 +122,19 @@ app.MapGet("/products/{id}", async (
     var isPremium    = await client.GetBoolAsync  (KomentoExperiments.PremiumProductPage.Id,      subjectId ?? "", ctx, defaultValue: false,     ct: ct);
     var priceVariant = await client.GetStringAsync(KomentoExperiments.PriceDisplay.Id,             subjectId ?? "", ctx, defaultValue: "default", ct: ct);
 
-    return Results.Ok(new
+    var price = priceVariant switch
     {
-        productId    = id,
-        name         = $"Komento Widget {id}",
-        price        = priceVariant switch
-        {
-            "loyalty-price" => 79.99m,
-            "vip-price"     => 89.99m,
-            _               => 99.99m
-        },
-        premiumPage  = isPremium,
-        priceVariant
-    });
+        "loyalty-price" => 79.99m,
+        "vip-price"     => 89.99m,
+        _               => 99.99m
+    };
+
+    return TypedResults.Ok(new ProductResponse(
+        ProductId:    id,
+        Name:         $"Komento Widget {id}",
+        Price:        price,
+        PremiumPage:  isPremium,
+        PriceVariant: priceVariant));
 }).RequireAuthorization();
 
 // ── /recommendations — uses OpenFeature IFeatureClient ────────────────────
@@ -151,13 +154,11 @@ app.MapGet("/recommendations", async (
 
     var algo = await featureClient.GetStringValueAsync(KomentoExperiments.RecommendationAlgorithm.Id, "collaborative", evalCtx);
 
-    return Results.Ok(new
-    {
-        algorithm = algo,
-        items     = algo == "content-based"
-            ? new[] { "Widget A", "Widget B", "Widget C" }
-            : new[] { "Widget D", "Widget E", "Widget F" }
-    });
+    string[] items = algo == "content-based"
+        ? ["Widget A", "Widget B", "Widget C"]
+        : ["Widget D", "Widget E", "Widget F"];
+
+    return TypedResults.Ok(new RecommendationsResponse(algo, items));
 }).RequireAuthorization();
 
 app.Run();
