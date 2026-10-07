@@ -23,6 +23,7 @@ samples/
   Komento.Sample.EcommerceApi/   — Customer-facing API
   Komento.Sample.AdminApi/       — Back-office API
   Komento.Sample.ServiceDefaults/— Shared health-checks / service discovery
+  Komento.Sample.Contracts/      — Response types shared by the APIs and the tests
 ```
 
 ## Prerequisites
@@ -140,21 +141,22 @@ them back:
 curl "http://localhost:<admin-port>/exposures?subjectId=nobody"
 ```
 
-`/products/{id}` evaluates two experiments, so you get two rows. "nobody" is neither a loyalty
-member nor VIP and is on the free plan, so both are ineligible:
+`/products/{id}` evaluates two experiments, so you get two rows (newest first). "nobody" is
+neither a loyalty member nor VIP and is on the free plan, so both are ineligible:
 
 ```json
 [
-  { "experiment": "premium-product-page", "subjectId": "nobody", "subjectType": "user",
-    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "..." },
   { "experiment": "price-display", "subjectId": "nobody", "subjectType": "user",
+    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "..." },
+  { "experiment": "premium-product-page", "subjectId": "nobody", "subjectType": "user",
     "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "..." }
 ]
 ```
 
 Outsiders and ineligible subjects are recorded too (with variant `control`); filter them out
-when analyzing. The same exposures are also written to the EcommerceApi log by
-`AddLoggingExposureSink()`.
+when analyzing. Every evaluation is recorded (nothing is de-duplicated), so the endpoint returns
+at most the latest 100 exposures for the subject. The same exposures are also written to the
+EcommerceApi log by `AddLoggingExposureSink()`.
 
 ## Seeded data
 

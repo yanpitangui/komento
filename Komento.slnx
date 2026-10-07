@@ -24,5 +24,6 @@
     <Project Path="samples/Komento.Sample.EcommerceApi/Komento.Sample.EcommerceApi.csproj" />
     <Project Path="samples/Komento.Sample.AdminApi/Komento.Sample.AdminApi.csproj" />
     <Project Path="samples/Komento.Sample.ServiceDefaults/Komento.Sample.ServiceDefaults.csproj" />
+    <Project Path="samples/Komento.Sample.Contracts/Komento.Sample.Contracts.csproj" />
   </Folder>
 </Solution>

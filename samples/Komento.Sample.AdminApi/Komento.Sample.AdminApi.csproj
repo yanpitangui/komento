@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Komento/Komento.csproj" />
+    <ProjectReference Include="../Komento.Sample.Contracts/Komento.Sample.Contracts.csproj" />
     <ProjectReference Include="../Komento.Sample.ServiceDefaults/Komento.Sample.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

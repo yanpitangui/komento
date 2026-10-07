@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../samples/Komento.Sample.AppHost/Komento.Sample.AppHost.csproj" />
+    <ProjectReference Include="../../samples/Komento.Sample.Contracts/Komento.Sample.Contracts.csproj" />
   </ItemGroup>
 </Project>

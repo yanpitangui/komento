@@ -23,9 +23,9 @@ internal sealed class PostgresExposureSink(NpgsqlDataSource db) : IExposureSink
             await writer.WriteAsync(e.SubjectId,   NpgsqlDbType.Text,        ct);
             await writer.WriteAsync(e.SubjectType, NpgsqlDbType.Text,        ct);
             await writer.WriteAsync(e.VariantName, NpgsqlDbType.Text,        ct);
-            await writer.WriteAsync(e.IsEligible, NpgsqlDbType.Boolean,      ct);
-            await writer.WriteAsync(e.IsOutsider, NpgsqlDbType.Boolean,      ct);
-            await writer.WriteAsync(e.Timestamp,  NpgsqlDbType.TimestampTz,  ct);
+            await writer.WriteAsync(e.IsEligible,  NpgsqlDbType.Boolean,     ct);
+            await writer.WriteAsync(e.IsOutsider,  NpgsqlDbType.Boolean,     ct);
+            await writer.WriteAsync(e.Timestamp,   NpgsqlDbType.TimestampTz, ct);
         }
 
         await writer.CompleteAsync(ct);
