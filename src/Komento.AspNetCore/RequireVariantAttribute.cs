@@ -19,7 +19,7 @@ public sealed class RequireVariantAttribute : Attribute, IAsyncActionFilter
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var ct = context.HttpContext.RequestAborted;
-        var (subjectId, evalCtx) = await EvaluationContextHelper.ResolveAsync(context.HttpContext, ct);
+        var (subjectId, evalCtx) = await KomentoRequestContext.ResolveAsync(context.HttpContext, ct);
 
         if (subjectId is null) { context.Result = new NotFoundResult(); return; }
 

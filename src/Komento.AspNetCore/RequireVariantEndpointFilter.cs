@@ -17,7 +17,7 @@ internal sealed class RequireVariantEndpointFilter : IEndpointFilter
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext ctx, EndpointFilterDelegate next)
     {
         var ct = ctx.HttpContext.RequestAborted;
-        var (subjectId, evalCtx) = await EvaluationContextHelper.ResolveAsync(ctx.HttpContext, ct);
+        var (subjectId, evalCtx) = await KomentoRequestContext.ResolveAsync(ctx.HttpContext, ct);
 
         if (subjectId is null) return Results.NotFound();
 

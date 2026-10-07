@@ -3,10 +3,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Komento.AspNetCore;
 
-internal static class EvaluationContextHelper
+/// <summary>Resolves who a request is for and what is known about it, using the registered Komento providers.</summary>
+public static class KomentoRequestContext
 {
-    internal static async ValueTask<(string? SubjectId, EvaluationContext Ctx)> ResolveAsync(
-        HttpContext httpContext, CancellationToken ct)
+    /// <summary>
+    /// Asks the registered <see cref="ISubjectProvider"/>s for the request's subject (the first non-null answer
+    /// wins), and runs the registered <see cref="IEvaluationContextEnricher"/>s to build its evaluation context.
+    /// </summary>
+    /// <returns>The subject ID, or null when no provider found one, and the enriched context.</returns>
+    public static async ValueTask<(string? SubjectId, EvaluationContext Context)> ResolveAsync(
+        HttpContext httpContext, CancellationToken ct = default)
     {
         var providers = httpContext.RequestServices.GetServices<ISubjectProvider>();
         var enrichers = httpContext.RequestServices.GetServices<IEvaluationContextEnricher>();
