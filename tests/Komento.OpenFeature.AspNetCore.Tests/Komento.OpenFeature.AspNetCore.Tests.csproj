@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="TUnit" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\..\src\Komento\Komento.csproj" />
+    <ProjectReference Include="..\..\src\Komento.AspNetCore\Komento.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Komento.OpenFeature\Komento.OpenFeature.csproj" />
+    <ProjectReference Include="..\..\src\Komento.OpenFeature.AspNetCore\Komento.OpenFeature.AspNetCore.csproj" />
+  </ItemGroup>
+</Project>
