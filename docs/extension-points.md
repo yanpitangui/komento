@@ -206,6 +206,7 @@ public readonly struct ExposureEvent
     public bool           IsEligible  { get; init; }
     public bool           IsOutsider  { get; init; }
     public DateTimeOffset Timestamp   { get; init; }
+    public string?        ConfigRevision { get; init; }
 }
 ```
 
@@ -220,6 +221,7 @@ public readonly struct ExposureEvent
 **Fields worth knowing:**
 - `SubjectType` says which kind of ID `SubjectId` holds (`"user"`, `"device"`, ...). Only join exposures with conversion events keyed on the same kind of ID.
 - Outsiders (`IsOutsider`) and ineligible subjects (`!IsEligible`) are recorded too, with `VariantName == "control"`. Filter them out when analyzing.
+- `ConfigRevision` fingerprints the experiment's definition, so exposures recorded under different rules can be told apart. It does not cover segment membership. See [Exposures and conversions](exposures-and-conversions.md#config-revision).
 - Nothing is de-duplicated: every evaluation is an exposure. Analysis normally takes the first exposure per subject and experiment.
 
 **Production notes:**

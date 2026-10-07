@@ -30,10 +30,17 @@ public readonly struct ExposureEvent
     public bool           IsEligible  { get; init; }   // false: excluded by a filter
     public bool           IsOutsider  { get; init; }   // true: hash fell outside all allocations (sees control behavior)
     public DateTimeOffset Timestamp   { get; init; }
+    public string?        ConfigRevision { get; init; }   // fingerprint of the experiment's definition at that moment
 }
 ```
 
 Nothing is de-duplicated: every evaluation is an exposure, so a subject has many.
+
+### Config revision
+
+`ConfigRevision` is a short fingerprint of the experiment's definition: id, subject type, variants and allocations, filters and overrides. Equal definitions give equal revisions, in any process. It changes when the definition changes, so you can tell exposures that ran under different rules apart. For example, group by `(FlagKey, ConfigRevision)` before comparing variants, or discard the exposures from before an allocation was edited.
+
+Segment membership is not part of the definition. A config that says "segment `beta-users` gets `treatment`" keeps its revision when someone joins `beta-users` in the segment store. To analyze membership changes, use the exposure's `Timestamp`.
 
 ### Reading the stream directly
 
