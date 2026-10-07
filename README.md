@@ -590,7 +590,7 @@ A `System.Diagnostics.Metrics` meter named `Komento` is always on:
 | `komento.exposures.dropped` | `experiment` | Exposures dropped because the exposure stream was full |
 | `komento.exposures.sink.dropped` | `sink`, `reason` (`queue_full` / `write_failed` / `write_timeout`) | Exposures a sink did not receive |
 
-Outsiders and ineligible subjects are reported with `variant="control"`, so filter on `outcome="assigned"` to count exposures to real variants. Subject IDs are never used as tags. To export with OpenTelemetry:
+Outsiders and ineligible subjects are reported with `variant="control"`, so filter on `outcome="assigned"` to count exposures to real variants. Tags carry only bounded values (experiment, variant, outcome), which keeps metric cardinality low; per-subject detail lives in the exposure stream and sinks. To export with OpenTelemetry:
 
 ```csharp
 builder.Services.AddOpenTelemetry()
@@ -645,7 +645,7 @@ public sealed class HttpExposureSink(IHttpClientFactory httpClientFactory) : IEx
 
 Rules for sinks:
 - `WriteAsync` is never called concurrently for the same sink, so you don't need locking.
-- Pass `ct` through. It is cancelled when `WriteTimeout` elapses or the host stops.
+- Pass `ct` through. It is cancelled when `WriteTimeout` elapses, or when shutdown gives up on the sink after `ShutdownFlushTimeout`.
 - If it throws or times out, that batch is dropped and later batches still arrive. Do any retrying inside the sink.
 - The sink is created once as a singleton from the root service provider, so it can't depend on scoped services.
 
