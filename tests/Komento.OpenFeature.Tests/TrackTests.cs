@@ -136,4 +136,48 @@ public class TrackTests
             global::OpenFeature.Api.Instance.SetContext(OFContext.Empty);
         }
     }
+
+    // The SDK merges the global context into Track but not the transaction context (it does for evaluations),
+    // so the provider applies the transaction context itself to keep the two consistent.
+
+    [Test]
+    [NotInParallel] // sets the process-wide transaction context propagator
+    public async Task Track_applies_the_transaction_context_when_the_call_carries_none()
+    {
+        var (provider, tracker) = Build();
+        var domain = $"track-domain-{Guid.NewGuid():N}";
+        await global::OpenFeature.Api.Instance.SetProviderAsync(domain, provider);
+        global::OpenFeature.Api.Instance.SetTransactionContextPropagator(
+            new global::OpenFeature.AsyncLocalTransactionContextPropagator());
+        global::OpenFeature.Api.Instance.SetTransactionContext(
+            OFContext.Builder().SetTargetingKey("tx-user").Set("plan", new Value("premium")).Build());
+
+        global::OpenFeature.Api.Instance.GetClient(domain).Track("purchase");   // no context argument
+
+        var call = tracker.Calls.Should().ContainSingle().Subject;
+        call.SubjectId.Should().Be("tx-user");
+        call.Context.TryGetValue("plan", out var plan).Should().BeTrue();
+        plan.Should().Be("premium");
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task The_calls_own_context_takes_precedence_over_the_transaction_context()
+    {
+        var (provider, tracker) = Build();
+        var domain = $"track-domain-{Guid.NewGuid():N}";
+        await global::OpenFeature.Api.Instance.SetProviderAsync(domain, provider);
+        global::OpenFeature.Api.Instance.SetTransactionContextPropagator(
+            new global::OpenFeature.AsyncLocalTransactionContextPropagator());
+        global::OpenFeature.Api.Instance.SetTransactionContext(
+            OFContext.Builder().SetTargetingKey("tx-user").Set("plan", new Value("free")).Build());
+
+        var call = OFContext.Builder().SetTargetingKey("call-user").Set("plan", new Value("premium")).Build();
+        global::OpenFeature.Api.Instance.GetClient(domain).Track("purchase", call);
+
+        var recorded = tracker.Calls.Should().ContainSingle().Subject;
+        recorded.SubjectId.Should().Be("call-user");
+        recorded.Context.TryGetValue("plan", out var plan).Should().BeTrue();
+        plan.Should().Be("premium");
+    }
 }

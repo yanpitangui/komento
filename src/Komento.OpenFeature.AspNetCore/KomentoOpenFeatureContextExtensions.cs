@@ -14,9 +14,10 @@ public static class KomentoOpenFeatureContextExtensions
     /// <summary>
     /// Resolves the request's subject and evaluation context once, with the registered
     /// <see cref="ISubjectProvider"/>s and <see cref="IEvaluationContextEnricher"/>s, and sets the result as
-    /// OpenFeature's transaction context. Every OpenFeature evaluation and <c>Track</c> call in the request then
-    /// carries the same targeting key and attributes without building a context per call. Place it after
-    /// authentication. A request with no resolvable subject continues unchanged.
+    /// OpenFeature's transaction context. Every OpenFeature evaluation in the request then carries the same
+    /// targeting key and attributes without building a context per call, and so does every <c>Track</c> call
+    /// handled by <c>KomentoFeatureProvider</c> (it applies the transaction context to tracking, which the SDK
+    /// leaves out). Place it after authentication. A request with no resolvable subject continues unchanged.
     /// </summary>
     public static IApplicationBuilder UseKomentoOpenFeatureContext(this IApplicationBuilder app)
     {

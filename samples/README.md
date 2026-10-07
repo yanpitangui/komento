@@ -11,7 +11,8 @@ A runnable end-to-end demo that exercises every Komento public extension point:
 | `ISegmentProvider` | `NatsLoyaltyStore` + `VipBinSetStore` |
 | `BinSet` | Compact in-memory VIP user set loaded from PostgreSQL |
 | `IExperimentClient` | Direct usage in `/products/{id}` |
-| `KomentoFeatureProvider` | OpenFeature bridge in `/recommendations` |
+| `KomentoFeatureProvider` | OpenFeature bridge in `/recommendations`; it loads the configs when it is registered |
+| `UseKomentoOpenFeatureContext()` | Builds the request's OpenFeature context once (subject provider + enrichers), so `/recommendations` and `/recommendations/clicks` pass no context |
 | `IExposureSink` | `PostgresExposureSink` batches every exposure into the `exposures` table |
 | `IExperimentTracker` / `ITrackSink` | `/products/{id}/purchase` records a conversion natively; `PostgresTrackSink` stores it in the `conversions` table |
 | OpenFeature `Track` | `/recommendations/clicks` records a conversion through `IFeatureClient.Track`, delivered by the same sink |
@@ -138,8 +139,12 @@ curl -H "Authorization: Bearer $TOKEN" \
 ```
 
 The `recommendation-algorithm` experiment is evaluated through the OpenFeature
-`KomentoFeatureProvider` bridge, returning `collaborative` or `content-based`
-depending on the experiment assignment.
+`KomentoFeatureProvider` bridge. Users on the `premium` plan are assigned `collaborative` or
+`content-based`; everyone else gets the default, `collaborative`.
+
+The endpoint passes no context to OpenFeature. `app.UseKomentoOpenFeatureContext()` ran the
+subject provider and the enrichers once for the request and set the result as OpenFeature's
+transaction context, which is where the experiment's `plan` filter finds the user's plan.
 
 ### 7. See the recorded exposures
 
@@ -198,8 +203,8 @@ On startup, `DataSeeder` seeds three experiments into NATS KV:
 
 | Experiment | Buckets | Segments |
 |---|---|---|
-| `premium-product-page` | control 100 %, treatment 0 % | none |
-| `price-display` | default 50 %, loyalty-price 30 %, vip-price 20 % | loyalty filter, VIP override |
-| `recommendation-algorithm` | collaborative 70 %, content-based 30 % | premium-plan filter |
+| `premium-product-page` | `on` 100 % | filter: `plan = premium` |
+| `price-display` | `vip-price` 100 % (`default` and `loyalty-price` 0 %) | filter: VIP segment; override: loyalty segment gets `loyalty-price` |
+| `recommendation-algorithm` | `collaborative` 70 %, `content-based` 30 % | filter: `plan = premium` |
 
-It also seeds three loyalty users (`alice`, `bob`, `carol`) into the `loyalty` NATS KV bucket.
+It also seeds two loyalty users (`user-1`, `user-2`) into the `loyalty` NATS KV bucket.

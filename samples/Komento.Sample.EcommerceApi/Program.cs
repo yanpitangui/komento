@@ -75,7 +75,8 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Startup sequence: seed → Komento init → OpenFeature init
+// Startup sequence: seed → Komento init (for the endpoints that use IExperimentClient directly) → OpenFeature.
+// Registering the provider loads the configs as well, so the OpenFeature path does not depend on the call above.
 await app.Services.GetRequiredService<DataSeeder>().SeedAsync();
 await app.Services.InitializeKomentoAsync();
 await Api.Instance.SetProviderAsync(app.Services.GetRequiredService<KomentoFeatureProvider>());
@@ -83,6 +84,10 @@ await Api.Instance.SetProviderAsync(app.Services.GetRequiredService<KomentoFeatu
 app.MapDefaultEndpoints();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Resolve the request's subject and context once (subject provider + enrichers) and hand it to OpenFeature as the
+// transaction context, so OpenFeature evaluations and Track calls below need no context argument.
+app.UseKomentoOpenFeatureContext();
 
 // ── /token — issue a demo JWT (no auth required) ──────────────────────────
 
@@ -110,23 +115,11 @@ app.MapGet("/products/{id}", async (
     string id,
     HttpContext httpContext,
     IExperimentClient client,
-    IEnumerable<ISubjectProvider> subjectProviders,
-    IEnumerable<IEvaluationContextEnricher> enrichers,
     CancellationToken ct) =>
 {
-    string? subjectId = null;
-    foreach (var p in subjectProviders)
-    {
-        subjectId = p.GetSubject(httpContext);
-        if (subjectId is not null) break;
-    }
+    var (subjectId, ctx) = await KomentoRequestContext.ResolveAsync(httpContext, ct);
 
-    var ctxBuilder = global::Komento.EvaluationContext.Create();
-    foreach (var e in enrichers)
-        await e.EnrichAsync(httpContext, ctxBuilder, ct);
-    var ctx = ctxBuilder.Build();
-
-    var isPremium    = await client.GetBoolAsync  (KomentoExperiments.PremiumProductPage.Id,      subjectId ?? "", ctx, defaultValue: false,     ct: ct);
+    var isPremium   = await client.GetBoolAsync  (KomentoExperiments.PremiumProductPage.Id,      subjectId ?? "", ctx, defaultValue: false,     ct: ct);
     var priceVariant = await client.GetStringAsync(KomentoExperiments.PriceDisplay.Id,             subjectId ?? "", ctx, defaultValue: "default", ct: ct);
 
     var price = priceVariant switch
@@ -146,21 +139,10 @@ app.MapGet("/products/{id}", async (
 
 // ── /recommendations — uses OpenFeature IFeatureClient ────────────────────
 
-app.MapGet("/recommendations", async (
-    HttpContext httpContext,
-    IFeatureClient featureClient,
-    IEnumerable<ISubjectProvider> subjectProviders,
-    CancellationToken ct) =>
+app.MapGet("/recommendations", async (IFeatureClient featureClient) =>
 {
-    var subjectId = ResolveSubject(subjectProviders, httpContext);
-    var plan      = httpContext.User.FindFirst("plan")?.Value ?? "free";
-
-    var evalCtx = global::OpenFeature.Model.EvaluationContext.Builder()
-        .SetTargetingKey(subjectId)
-        .Set("plan", new Value(plan))
-        .Build();
-
-    var algo = await featureClient.GetStringValueAsync(KomentoExperiments.RecommendationAlgorithm.Id, "collaborative", evalCtx);
+    // No context argument: the transaction context set by UseKomentoOpenFeatureContext supplies the subject and plan.
+    var algo = await featureClient.GetStringValueAsync(KomentoExperiments.RecommendationAlgorithm.Id, "collaborative");
 
     string[] items = algo == "content-based"
         ? ["Widget A", "Widget B", "Widget C"]
@@ -171,18 +153,16 @@ app.MapGet("/recommendations", async (
 
 // ── POST /products/{id}/purchase — records a conversion with IExperimentTracker ──
 
-app.MapPost("/products/{id}/purchase", (
+app.MapPost("/products/{id}/purchase", async (
     string id,
     PurchaseRequest purchase,
     HttpContext httpContext,
     IExperimentTracker tracker,
-    IEnumerable<ISubjectProvider> subjectProviders) =>
+    CancellationToken ct) =>
 {
-    var subjectId = ResolveSubject(subjectProviders, httpContext);
-    var plan      = httpContext.User.FindFirst("plan")?.Value ?? "free";
+    var (subjectId, ctx) = await KomentoRequestContext.ResolveAsync(httpContext, ct);
 
-    var ctx = global::Komento.EvaluationContext.Create().Set("plan", plan).Build();
-    tracker.Track("purchase", subjectId, in ctx,
+    tracker.Track("purchase", subjectId ?? "anonymous", in ctx,
         value: (double)purchase.Amount,
         properties: new Dictionary<string, object?> { ["productId"] = id });
 
@@ -191,35 +171,13 @@ app.MapPost("/products/{id}/purchase", (
 
 // ── POST /recommendations/clicks — records a conversion through OpenFeature's Track API ──
 
-app.MapPost("/recommendations/clicks", (
-    RecommendationClickRequest click,
-    HttpContext httpContext,
-    IFeatureClient featureClient,
-    IEnumerable<ISubjectProvider> subjectProviders) =>
+app.MapPost("/recommendations/clicks", (RecommendationClickRequest click, IFeatureClient featureClient) =>
 {
-    var subjectId = ResolveSubject(subjectProviders, httpContext);
-    var plan      = httpContext.User.FindFirst("plan")?.Value ?? "free";
-
-    var evalCtx = global::OpenFeature.Model.EvaluationContext.Builder()
-        .SetTargetingKey(subjectId)
-        .Set("plan", new Value(plan))
-        .Build();
-
-    featureClient.Track("recommendation-click", evalCtx,
-        TrackingEventDetails.Builder().Set("item", click.Item).Build());
+    // No context argument here either: the transaction context carries the subject and plan.
+    featureClient.Track("recommendation-click",
+        trackingEventDetails: TrackingEventDetails.Builder().Set("item", click.Item).Build());
 
     return TypedResults.NoContent();
 }).RequireAuthorization();
 
 app.Run();
-
-// The subject comes from the registered ISubjectProvider (JwtSubjectProvider), not from a raw claim:
-// ASP.NET's JWT handler remaps the "sub" claim, so reading it directly would miss it.
-static string ResolveSubject(IEnumerable<ISubjectProvider> providers, HttpContext httpContext)
-{
-    foreach (var provider in providers)
-        if (provider.GetSubject(httpContext) is { } subject)
-            return subject;
-
-    return "anonymous";
-}

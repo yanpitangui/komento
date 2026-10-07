@@ -59,7 +59,9 @@ public sealed class KomentoFeatureProvider(
 
     /// <summary>
     /// Forwards OpenFeature tracking calls to <see cref="IExperimentTracker"/>. Does nothing when no tracker is
-    /// registered or when <see cref="KomentoOptions.EnableTrackStream"/> is off.
+    /// registered or when <see cref="KomentoOptions.EnableTrackStream"/> is off. The SDK merges its global
+    /// context into the call but not the transaction context (it does for evaluations), so the provider adds the
+    /// transaction context underneath the call's own context to keep tracking consistent with evaluation.
     /// </summary>
     public override void Track(
         string trackingEventName, OFContext? evaluationContext = null, TrackingEventDetails? trackingEventDetails = null)
@@ -72,7 +74,8 @@ public sealed class KomentoFeatureProvider(
             return;
         }
 
-        if (string.IsNullOrEmpty(evaluationContext?.TargetingKey))
+        var context = WithTransactionContext(evaluationContext);
+        if (string.IsNullOrEmpty(context.TargetingKey))
         {
             CountDropped("no_subject");
             return;
@@ -92,8 +95,20 @@ public sealed class KomentoFeatureProvider(
             }
         }
 
-        var komentoCtx = MapContext(evaluationContext);
-        tracker.Track(trackingEventName, evaluationContext.TargetingKey, in komentoCtx, value, properties);
+        var komentoCtx = MapContext(context);
+        tracker.Track(trackingEventName, context.TargetingKey!, in komentoCtx, value, properties);
+    }
+
+    // The transaction context goes underneath; the call's own context wins where both set a value.
+    private static OFContext WithTransactionContext(OFContext? call)
+    {
+        var transaction = Api.Instance.GetTransactionContext();
+        if (transaction.Count == 0)
+            return call ?? OFContext.Empty;
+
+        var builder = OFContext.Builder().Merge(transaction);
+        if (call is not null) builder.Merge(call);
+        return builder.Build();
     }
 
     private static void CountDropped(string reason)
