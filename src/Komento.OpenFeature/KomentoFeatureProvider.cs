@@ -7,9 +7,51 @@ using KomentoCtx = Komento.EvaluationContext;
 
 namespace Komento.OpenFeature;
 
-public sealed class KomentoFeatureProvider(IExperimentClient client) : FeatureProvider
+public sealed class KomentoFeatureProvider(IExperimentClient client, IExperimentTracker? tracker = null) : FeatureProvider
 {
     public override Metadata GetMetadata() => new("Komento");
+
+    /// <summary>
+    /// Forwards OpenFeature tracking calls to <see cref="IExperimentTracker"/>. Does nothing when no tracker is
+    /// registered or when <see cref="KomentoOptions.EnableTrackStream"/> is off.
+    /// </summary>
+    public override void Track(
+        string trackingEventName, OFContext? evaluationContext = null, TrackingEventDetails? trackingEventDetails = null)
+    {
+        if (tracker is null) return;
+
+        if (string.IsNullOrEmpty(trackingEventName))
+        {
+            CountDropped("no_event_name");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(evaluationContext?.TargetingKey))
+        {
+            CountDropped("no_subject");
+            return;
+        }
+
+        // The SDK keeps the numeric value apart from the other fields.
+        var value = trackingEventDetails?.Value;
+
+        Dictionary<string, object?>? properties = null;
+        if (trackingEventDetails is not null)
+        {
+            foreach (var field in trackingEventDetails.AsDictionary())
+            {
+                var raw = ValueToObject(field.Value);
+                if (raw is not null)
+                    (properties ??= new Dictionary<string, object?>(StringComparer.Ordinal))[field.Key] = raw;
+            }
+        }
+
+        var komentoCtx = MapContext(evaluationContext);
+        tracker.Track(trackingEventName, evaluationContext.TargetingKey, in komentoCtx, value, properties);
+    }
+
+    private static void CountDropped(string reason)
+        => OpenFeatureMetrics.TrackDropped.Add(1, new KeyValuePair<string, object?>("reason", reason));
 
     public override Task<ResolutionDetails<bool>> ResolveBooleanValueAsync(
         string flagKey, bool defaultValue, OFContext? context = null, CancellationToken cancellationToken = default)
