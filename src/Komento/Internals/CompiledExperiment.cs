@@ -7,6 +7,7 @@ internal sealed class CompiledExperiment
     public CompiledVariant[] Variants    { get; init; } = [];
     public FilterConfig[]    Filters     { get; init; } = [];
     public OverrideRule[]    Overrides   { get; init; } = [];
+    public string[]          ExposureContext { get; init; } = [];
 
     /// <summary>Fingerprint of the definition this experiment was compiled from.</summary>
     public string            Revision    { get; init; } = "";

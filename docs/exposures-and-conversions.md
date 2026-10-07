@@ -31,10 +31,31 @@ public readonly struct ExposureEvent
     public bool           IsOutsider  { get; init; }   // true: hash fell outside all allocations (sees control behavior)
     public DateTimeOffset Timestamp   { get; init; }
     public string?        ConfigRevision { get; init; }   // fingerprint of the experiment's definition at that moment
+    public IReadOnlyDictionary<string, object>? Context { get; init; }   // the attributes the experiment lists in exposureContext
 }
 ```
 
 Nothing is de-duplicated: every evaluation is an exposure, so a subject has many.
+
+### Exposure context
+
+Analysis often needs the attributes a subject was evaluated with (country, plan, platform). Each experiment says which ones to record by listing their keys in its config:
+
+```json
+{ "id": "checkout-flow", ..., "exposureContext": [ "country", "plan" ] }
+```
+
+Every exposure of that experiment then carries those attributes in `Context`:
+
+```csharp
+exposure.Context   // { "country": "BR", "plan": "premium" }
+```
+
+- Values come from `KomentoOptions.StaticContext` and the context passed with the call, with the call's value winning, the same merge conversions use.
+- A listed key missing from the evaluation is left out. `Context` is `null` when the experiment lists no keys or none were present.
+- Ineligible subjects and outsiders get the context too.
+- Only the listed keys are recorded, so attributes that are personal data stay off the event unless you list them.
+- The list is part of the definition, so changing it changes the [config revision](#config-revision).
 
 ### Config revision
 
