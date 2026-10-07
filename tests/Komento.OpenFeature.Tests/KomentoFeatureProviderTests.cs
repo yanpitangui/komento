@@ -156,13 +156,13 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveBooleanValueAsync("bool-flag", false, ctx);
 
         result.Value.Should().BeTrue();
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
         result.Variant.Should().Be("treatment");
         result.ErrorType.Should().Be(ErrorType.None);
     }
 
     [Test]
-    public async Task ResolveBooleanValue_parse_error_when_value_is_not_bool()
+    public async Task ResolveBooleanValue_type_mismatch_when_value_is_not_bool()
     {
         var config = new ExperimentConfig
         {
@@ -176,7 +176,7 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveBooleanValueAsync("string-as-bool", false, ctx);
 
         result.Value.Should().BeFalse();
-        result.ErrorType.Should().Be(ErrorType.ParseError);
+        result.ErrorType.Should().Be(ErrorType.TypeMismatch);
         result.Reason.Should().Be(Reason.Error);
     }
 
@@ -197,11 +197,11 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveStringValueAsync("str-flag", "default", ctx);
 
         result.Value.Should().Be("blue");
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
     }
 
     [Test]
-    public async Task ResolveStringValue_parse_error_when_value_is_not_string()
+    public async Task ResolveStringValue_type_mismatch_when_value_is_not_string()
     {
         var config = new ExperimentConfig
         {
@@ -215,7 +215,7 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveStringValueAsync("int-as-str", "default", ctx);
 
         result.Value.Should().Be("default");
-        result.ErrorType.Should().Be(ErrorType.ParseError);
+        result.ErrorType.Should().Be(ErrorType.TypeMismatch);
     }
 
     // ── int ───────────────────────────────────────────────────────────────────
@@ -235,11 +235,11 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveIntegerValueAsync("int-flag", 0, ctx);
 
         result.Value.Should().Be(7);
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
     }
 
     [Test]
-    public async Task ResolveIntegerValue_parse_error_when_value_is_not_int()
+    public async Task ResolveIntegerValue_type_mismatch_when_value_is_not_int()
     {
         var config = new ExperimentConfig
         {
@@ -253,7 +253,7 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveIntegerValueAsync("bool-as-int", 0, ctx);
 
         result.Value.Should().Be(0);
-        result.ErrorType.Should().Be(ErrorType.ParseError);
+        result.ErrorType.Should().Be(ErrorType.TypeMismatch);
     }
 
     // ── double ────────────────────────────────────────────────────────────────
@@ -273,11 +273,11 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveDoubleValueAsync("dbl-flag", 0.0, ctx);
 
         result.Value.Should().Be(3.14);
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
     }
 
     [Test]
-    public async Task ResolveDoubleValue_parse_error_when_value_is_not_double()
+    public async Task ResolveDoubleValue_type_mismatch_when_value_is_not_double()
     {
         var config = new ExperimentConfig
         {
@@ -291,7 +291,7 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveDoubleValueAsync("str-as-dbl", 0.0, ctx);
 
         result.Value.Should().Be(0.0);
-        result.ErrorType.Should().Be(ErrorType.ParseError);
+        result.ErrorType.Should().Be(ErrorType.TypeMismatch);
     }
 
     // ── structure: primitives ─────────────────────────────────────────────────
@@ -312,7 +312,7 @@ public class KomentoFeatureProviderTests
 
         result.Value.IsBoolean.Should().BeTrue();
         result.Value.AsBoolean.Should().BeTrue();
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
     }
 
     [Test]
@@ -372,13 +372,13 @@ public class KomentoFeatureProviderTests
         var structure = result.Value.AsStructure!;
         structure.GetValue("Color").AsString.Should().Be("red");
         structure.GetValue("Count").AsDouble.Should().Be(3);
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
     }
 
     // ── structure: parse error for non-serializable ───────────────────────────
 
     [Test]
-    public async Task ResolveStructureValue_non_serializable_returns_ParseError()
+    public async Task ResolveStructureValue_non_serializable_returns_TypeMismatch()
     {
         var config = new ExperimentConfig
         {
@@ -391,12 +391,12 @@ public class KomentoFeatureProviderTests
 
         var result = await provider.ResolveStructureValueAsync("struct-bad", new Value(), ctx);
 
-        result.ErrorType.Should().Be(ErrorType.ParseError);
+        result.ErrorType.Should().Be(ErrorType.TypeMismatch);
         result.Reason.Should().Be(Reason.Error);
     }
 
     [Test]
-    public async Task ResolveStructureValue_null_variant_returns_ParseError()
+    public async Task ResolveStructureValue_null_variant_returns_TypeMismatch()
     {
         var config = new ExperimentConfig
         {
@@ -409,7 +409,7 @@ public class KomentoFeatureProviderTests
 
         var result = await provider.ResolveStructureValueAsync("struct-null", new Value(), ctx);
 
-        result.ErrorType.Should().Be(ErrorType.ParseError);
+        result.ErrorType.Should().Be(ErrorType.TypeMismatch);
         result.Reason.Should().Be(Reason.Error);
     }
 
@@ -457,7 +457,7 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveBooleanValueAsync("admin-flag", false, ctx);
 
         result.Value.Should().BeTrue();
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
     }
 
     [Test]
@@ -502,7 +502,7 @@ public class KomentoFeatureProviderTests
         var result = await provider.ResolveBooleanValueAsync("sub-type-flag", false, ctx);
 
         result.Value.Should().BeTrue();
-        result.Reason.Should().Be(Reason.TargetingMatch);
+        result.Reason.Should().Be(Reason.Split);
     }
 
     [Test]

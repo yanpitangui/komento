@@ -134,27 +134,55 @@ public sealed class KomentoFeatureProvider(
     {
         if (string.IsNullOrEmpty(context?.TargetingKey))
             return new ResolutionDetails<T>(flagKey, defaultValue,
-                errorType: ErrorType.TargetingKeyMissing, reason: Reason.Error);
+                errorType: ErrorType.TargetingKeyMissing, reason: Reason.Error,
+                errorMessage: $"A targeting key is required to evaluate '{flagKey}'.");
 
         if (!client.ExperimentExists(flagKey))
             return new ResolutionDetails<T>(flagKey, defaultValue,
-                errorType: ErrorType.FlagNotFound, reason: Reason.Default);
+                errorType: ErrorType.FlagNotFound, reason: Reason.Default,
+                errorMessage: $"No experiment named '{flagKey}' is registered.");
 
         var komentoCtx = MapContext(context);
         var result = await client.GetVariantAsync(flagKey, context.TargetingKey, in komentoCtx, ct)
             .ConfigureAwait(false);
 
+        var outcome  = result.IsOutsider ? "outsider" : result.IsEligible ? "assigned" : "ineligible";
+        var metadata = BuildMetadata(outcome, result.SubjectType);
+
         if (!result.IsEligible || result.IsOutsider)
             return new ResolutionDetails<T>(flagKey, defaultValue,
-                reason: Reason.Default, variant: result.VariantName);
+                reason: Reason.Default, variant: result.VariantName, flagMetadata: metadata);
 
         var (ok, value) = tryExtract(result);
-        return ok
-            ? new ResolutionDetails<T>(flagKey, value,
-                reason: Reason.TargetingMatch, variant: result.VariantName)
-            : new ResolutionDetails<T>(flagKey, defaultValue,
-                errorType: ErrorType.ParseError, reason: Reason.Error, variant: result.VariantName);
+        if (ok)
+            return new ResolutionDetails<T>(flagKey, value,
+                reason: result.Source == AssignmentSource.Hash ? Reason.Split : Reason.TargetingMatch,
+                variant: result.VariantName, flagMetadata: metadata);
+
+        return new ResolutionDetails<T>(flagKey, defaultValue,
+            errorType: ErrorType.TypeMismatch, reason: Reason.Error, variant: result.VariantName,
+            errorMessage: $"Variant '{result.VariantName}' has {Describe(result.Value)}, not a {ExpectedType<T>()}.",
+            flagMetadata: metadata);
     }
+
+    private static ImmutableMetadata BuildMetadata(string outcome, string? subjectType)
+    {
+        var values = new Dictionary<string, object> { ["outcome"] = outcome };
+        if (subjectType is not null) values["subjectType"] = subjectType;
+        return new ImmutableMetadata(values);
+    }
+
+    private static string Describe(object? value)
+        => value is null ? "no value" : $"a {value.GetType().Name} value";
+
+    private static string ExpectedType<T>() => typeof(T) switch
+    {
+        var t when t == typeof(bool)   => "Boolean",
+        var t when t == typeof(string) => "String",
+        var t when t == typeof(int)    => "Integer",
+        var t when t == typeof(double) => "Double",
+        _                              => "Structure"
+    };
 
     private static KomentoCtx MapContext(OFContext context)
     {
