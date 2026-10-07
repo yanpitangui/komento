@@ -1,12 +1,24 @@
 using AwesomeAssertions;
 using Komento;
-using Komento.Internals;
+using Microsoft.Extensions.DependencyInjection;
 using TUnit.Core;
 
 namespace Komento.Tests;
 
 public class InMemorySegmentProviderTests
 {
+    [Test]
+    public async Task Registered_by_instance_is_resolved_from_the_container()
+    {
+        var services = new ServiceCollection();
+        services.AddKomento().AddSegmentProvider(Build(new() { ["vip"] = ["user-1"] }));
+
+        using var provider = services.BuildServiceProvider();
+        var segments = provider.GetRequiredService<ISegmentProvider>();
+
+        (await segments.IsInSegmentAsync("user-1", "vip")).Should().BeTrue();
+    }
+
     private static ISegmentProvider Build(Dictionary<string, IEnumerable<string>> segments)
         => new InMemorySegmentProvider(segments);
 

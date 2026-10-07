@@ -28,6 +28,12 @@ public sealed class KomentoBuilder
         return this;
     }
 
+    public KomentoBuilder AddSegmentProvider(ISegmentProvider provider)
+    {
+        Services.AddSingleton(provider);
+        return this;
+    }
+
     public KomentoBuilder AddPeriodicRefresh(TimeSpan interval, IReadOnlySet<string>? experimentIds = null)
     {
         var ids = experimentIds ?? new HashSet<string>();
