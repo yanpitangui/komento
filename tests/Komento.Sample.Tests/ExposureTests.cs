@@ -35,6 +35,23 @@ public sealed class ExposureTests(AppHostFixture fixture)
     }
 
     [Test]
+    public async Task Exposures_carry_the_config_revision_and_the_context_the_experiment_lists()
+    {
+        var userId = $"exposure-user-{Guid.NewGuid():N}";
+        var token  = await GetTokenAsync(userId);
+
+        await ViewProductAsync(token);
+
+        // Every seeded experiment lists "plan" under exposureContext, and the token's plan is "free".
+        var exposures = await WaitForExposuresAsync(userId, expected: 2, TimeSpan.FromSeconds(30));
+
+        exposures.Should().HaveCount(2);
+        exposures.Should().OnlyContain(e => !string.IsNullOrEmpty(e.ConfigRevision));
+        exposures.Should().OnlyContain(e =>
+            e.Context != null && e.Context.Count == 1 && e.Context["plan"] == "free");
+    }
+
+    [Test]
     public async Task Recommendations_through_OpenFeature_record_the_exposure_for_the_authenticated_user()
     {
         var userId = $"exposure-user-{Guid.NewGuid():N}";

@@ -51,7 +51,8 @@ internal static class ExperimentSeed
                 SubjectType = "user",
                 Variants    = [new VariantConfig { Name = "on", Allocation = 1.0, Value = true }],
                 GlobalFilters = [new TraitEqualsFilter { Key = "plan", Value = "premium" }],
-                Overrides   = []
+                Overrides   = [],
+                ExposureContext = ["plan"]
             },
             ["price-display"] = new ExperimentConfig
             {
@@ -64,7 +65,8 @@ internal static class ExperimentSeed
                     new VariantConfig { Name = "loyalty-price", Allocation = 0.0, Value = "loyalty-price" }
                 ],
                 GlobalFilters = [new SegmentIncludeFilter { Segment = "vip" }],
-                Overrides     = [new SegmentOverride { Segment = "loyalty", Variant = "loyalty-price" }]
+                Overrides     = [new SegmentOverride { Segment = "loyalty", Variant = "loyalty-price" }],
+                ExposureContext = ["plan"]
             },
             ["recommendation-algorithm"] = new ExperimentConfig
             {
@@ -76,7 +78,8 @@ internal static class ExperimentSeed
                     new VariantConfig { Name = "content-based", Allocation = 0.3, Value = "content-based" }
                 ],
                 GlobalFilters = [new TraitEqualsFilter { Key = "plan", Value = "premium" }],
-                Overrides     = []
+                Overrides     = [],
+                ExposureContext = ["plan"]
             }
         };
 }

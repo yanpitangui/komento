@@ -122,7 +122,8 @@ app.MapGet("/exposures", async Task<Results<Ok<IReadOnlyList<ExposureResponse>>,
 
     await using var conn = await db.OpenConnectionAsync(ct);
     await using var cmd  = new NpgsqlCommand(
-        "SELECT experiment, subject_id, subject_type, variant, is_eligible, is_outsider, exposed_at " +
+        "SELECT experiment, subject_id, subject_type, variant, is_eligible, is_outsider, exposed_at, " +
+        "config_revision, context::text " +
         "FROM exposures WHERE subject_id = $1 ORDER BY exposed_at DESC, id DESC LIMIT 100", conn);
     cmd.Parameters.AddWithValue(subjectId);
     await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -136,9 +137,16 @@ app.MapGet("/exposures", async Task<Results<Ok<IReadOnlyList<ExposureResponse>>,
             Variant:     reader.GetString(3),
             IsEligible:  reader.GetBoolean(4),
             IsOutsider:  reader.GetBoolean(5),
-            ExposedAt:   reader.GetFieldValue<DateTimeOffset>(6)));
+            ExposedAt:   reader.GetFieldValue<DateTimeOffset>(6),
+            ConfigRevision: reader.IsDBNull(7) ? null : reader.GetString(7),
+            Context:     ReadFields(reader, 8)));
 
     return TypedResults.Ok<IReadOnlyList<ExposureResponse>>(exposures);
+
+    static Dictionary<string, string?>? ReadFields(NpgsqlDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal)
+            ? null
+            : JsonSerializer.Deserialize<Dictionary<string, string?>>(reader.GetString(ordinal));
 });
 
 // ── Conversion endpoints ──────────────────────────────────────────────────

@@ -163,11 +163,21 @@ neither a loyalty member nor VIP and is on the free plan, so both are ineligible
 ```json
 [
   { "experiment": "price-display", "subjectId": "nobody", "subjectType": "user",
-    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "..." },
+    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "...",
+    "configRevision": "9f3c1a07be42d5e8", "context": { "plan": "free" } },
   { "experiment": "premium-product-page", "subjectId": "nobody", "subjectType": "user",
-    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "..." }
+    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "...",
+    "configRevision": "4d81e6c0a2b97f13", "context": { "plan": "free" } }
 ]
 ```
+
+Two fields beyond who saw what:
+
+- `configRevision` fingerprints the experiment's definition when the exposure was recorded. Edit an
+  experiment through the Admin API (step 3) and later exposures get a new revision, so you can tell
+  data collected under different rules apart.
+- `context` holds the attributes the experiment lists under `exposureContext` (every seeded
+  experiment lists `plan`). The values come from the same evaluation context the filters used.
 
 Outsiders and ineligible subjects are recorded too (with variant `control`); filter them out
 when analyzing. Every evaluation is recorded (nothing is de-duplicated), so the endpoint returns
@@ -207,4 +217,10 @@ On startup, `DataSeeder` seeds three experiments into NATS KV:
 | `price-display` | `vip-price` 100 % (`default` and `loyalty-price` 0 %) | filter: VIP segment; override: loyalty segment gets `loyalty-price` |
 | `recommendation-algorithm` | `collaborative` 70 %, `content-based` 30 % | filter: `plan = premium` |
 
+All three list `plan` under `exposureContext`.
+
 It also seeds two loyalty users (`user-1`, `user-2`) into the `loyalty` NATS KV bucket.
+
+If you ran the sample before `exposureContext` and `configRevision` existed, its data is out of date: the
+`exposures` table lacks two columns and the NATS experiments lack `exposureContext`. Remove the sample's
+volumes (stop it and run `docker volume prune`, or delete the Postgres and NATS volumes) and start again.
