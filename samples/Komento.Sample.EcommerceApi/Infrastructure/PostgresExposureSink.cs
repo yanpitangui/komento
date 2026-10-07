@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Komento;
 using Npgsql;
 using NpgsqlTypes;
@@ -8,7 +9,7 @@ namespace Komento.Sample.EcommerceApi.Infrastructure;
 internal sealed class PostgresExposureSink(NpgsqlDataSource db) : IExposureSink
 {
     private const string Copy =
-        "COPY exposures (experiment, subject_id, subject_type, variant, is_eligible, is_outsider, exposed_at) " +
+        "COPY exposures (experiment, subject_id, subject_type, variant, is_eligible, is_outsider, exposed_at, config_revision, context) " +
         "FROM STDIN (FORMAT BINARY)";
 
     public async ValueTask WriteAsync(IReadOnlyList<ExposureEvent> batch, CancellationToken ct)
@@ -26,6 +27,16 @@ internal sealed class PostgresExposureSink(NpgsqlDataSource db) : IExposureSink
             await writer.WriteAsync(e.IsEligible,  NpgsqlDbType.Boolean,     ct);
             await writer.WriteAsync(e.IsOutsider,  NpgsqlDbType.Boolean,     ct);
             await writer.WriteAsync(e.Timestamp,   NpgsqlDbType.TimestampTz, ct);
+
+            if (e.ConfigRevision is { } revision) await writer.WriteAsync(revision, NpgsqlDbType.Text, ct);
+            else                                  await writer.WriteNullAsync(ct);
+
+            if (e.Context is { } context)
+                await writer.WriteAsync(
+                    JsonSerializer.Serialize(context.ToDictionary(p => p.Key, p => p.Value.ToString())),
+                    NpgsqlDbType.Jsonb, ct);
+            else
+                await writer.WriteNullAsync(ct);
         }
 
         await writer.CompleteAsync(ct);

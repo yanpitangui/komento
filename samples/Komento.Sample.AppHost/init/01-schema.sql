@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS exposures (
     variant      TEXT        NOT NULL,
     is_eligible  BOOLEAN     NOT NULL,
     is_outsider  BOOLEAN     NOT NULL,
-    exposed_at   TIMESTAMPTZ NOT NULL
+    exposed_at   TIMESTAMPTZ NOT NULL,
+    config_revision TEXT     NULL,
+    context      JSONB       NULL
 );
 
 CREATE INDEX IF NOT EXISTS exposures_subject_idx ON exposures (subject_id);
