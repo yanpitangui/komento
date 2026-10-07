@@ -7,6 +7,10 @@ It needs the `OpenFeature` package at version 2.9.0 or later.
 ## Setup
 
 ```csharp
+using Komento.OpenFeature;
+using OpenFeature;
+using OpenFeature.Model;
+
 services.AddKomento()
         .AddSource<MyExperimentSource>();
 services.AddSingleton<KomentoFeatureProvider>();
@@ -15,7 +19,13 @@ var app = builder.Build();
 await Api.Instance.SetProviderAsync(app.Services.GetRequiredService<KomentoFeatureProvider>());
 
 var client = Api.Instance.GetClient();
+var context = EvaluationContext.Builder()
+    .SetTargetingKey(userId)
+    .Set("platform", new Value("web"))
+    .Build();
+
 bool enabled = await client.GetBooleanValueAsync("dark-mode", false, context);
+string theme = await client.GetStringValueAsync("ui-theme", "default", context);
 ```
 
 **Registering the provider loads the configs.** `SetProviderAsync` calls the provider's `InitializeAsync`, which reads the experiments from the registered `IExperimentSource`, the same load `InitializeKomentoAsync()` performs. On the OpenFeature path that call is optional; keep it if parts of your app evaluate through `IExperimentClient` directly.
@@ -96,7 +106,7 @@ The engine behind this is [`IConfigChanges`](extension-points.md#iconfigchanges)
 
 ## Tracking conversions
 
-`featureClient.Track(...)` is forwarded to Komento's `IExperimentTracker`, so conversions recorded through OpenFeature and through Komento's own API produce the same event and reach the same sinks. See [Conversions](../README.md#conversions).
+`featureClient.Track(...)` is forwarded to Komento's `IExperimentTracker`, so conversions recorded through OpenFeature and through Komento's own API produce the same event and reach the same sinks. See [Exposures and conversions](exposures-and-conversions.md#conversions).
 
 ## Telemetry
 

@@ -24,7 +24,8 @@ public interface IExperimentSource
 **Production notes:**
 - The built-in `AppSettingsExperimentSource` reads from `IConfiguration`. This is suitable for local development and integration tests only.
 - A production source will typically call an internal config service, query a database table, or read from a distributed cache.
-- `LoadAsync` is not on the hot path — it only runs at startup (and when a polling service triggers a refresh). I/O and allocations are acceptable here.
+- `LoadAsync` is not on the hot path — it only runs at startup (and when `AddPeriodicRefresh` triggers a refresh). I/O and allocations are acceptable here.
+- `Komento.Http` provides a ready-made HTTP source, and `InMemoryExperimentSource` covers tests. See [Configuration](configuration.md#sources).
 
 ---
 
@@ -69,7 +70,7 @@ public interface ISegmentProvider
 **What it solves:** Decouples segment storage from evaluation. The engine calls `IsInSegmentAsync` during filter and override evaluation when a `SegmentIncludeFilter` or `SegmentOverride` is present on an experiment.
 
 **Hot path warning:** This method IS on the hot path. Every call to `GetVariantAsync` for an experiment with segment operations will call it. Implementations must be fast:
-- Static lists: sort + binary search in memory (O log n), zero allocations. Use the built-in `InMemorySegmentProvider`.
+- Static lists: sort + binary search in memory (O log n), zero allocations. Use the built-in `InMemorySegmentProvider`, registered with `AddSegmentProvider(instance)`.
 - Dynamic lists: a local in-process cache with a short TTL (30–60 seconds) in front of the real store. Never call a database or HTTP endpoint inline without caching.
 
 **Production notes:**
@@ -156,7 +157,34 @@ public interface IExperimentClient
 
 **Production notes:**
 - The concrete engine is registered as a singleton under both `IExperimentClient` and `IConfigUpdater`. All application code should inject `IExperimentClient` only.
-- In unit tests, stub or mock `IExperimentClient` to force specific variants without running the real engine. The interface is simple enough that a hand-written stub is usually cleaner than a mock.
+- In unit tests, stub or mock `IExperimentClient` to force specific variants without running the real engine. The interface is simple enough that a hand-written stub is usually cleaner than a mock:
+
+```csharp
+public sealed class StubExperimentClient : IExperimentClient
+{
+    private readonly Dictionary<string, string> _forced = new(StringComparer.Ordinal);
+
+    public StubExperimentClient Force(string flag, string variant)
+    {
+        _forced[flag] = variant;
+        return this;
+    }
+
+    public ValueTask<VariantResult> GetVariantAsync(
+        string flagKey, string subjectId, in EvaluationContext ctx, CancellationToken ct = default)
+    {
+        var name = _forced.GetValueOrDefault(flagKey, "control");
+        return ValueTask.FromResult(new VariantResult { VariantName = name, IsEligible = true });
+    }
+
+    public ValueTask<bool>   GetBoolAsync  (string f, string s, in EvaluationContext c, bool   d = default, CancellationToken ct = default) => ValueTask.FromResult(d);
+    public ValueTask<string> GetStringAsync(string f, string s, in EvaluationContext c, string d = "",      CancellationToken ct = default) => ValueTask.FromResult(d);
+    public ValueTask<int>    GetIntAsync   (string f, string s, in EvaluationContext c, int    d = default, CancellationToken ct = default) => ValueTask.FromResult(d);
+    public ValueTask<double> GetDoubleAsync(string f, string s, in EvaluationContext c, double d = default, CancellationToken ct = default) => ValueTask.FromResult(d);
+
+    public bool ExperimentExists(string flagKey) => _forced.ContainsKey(flagKey);
+}
+```
 - `GetVariantAsync` is allocation-free on the synchronous fast path (no segment operations). It allocates only when a truly async segment provider is involved.
 
 ---
@@ -229,7 +257,7 @@ services.AddKomento(o => o.EnableExposureStream = true)       // required
 - A sink is created once, as a singleton, from the root service provider, so it must not depend on scoped services.
 - Options per sink: `Name`, `BatchSize`, `FlushInterval`, `MaxPendingBatches`, `WriteTimeout`, `ShutdownFlushTimeout`. When a sink falls behind, its queue fills and further batches are dropped for that sink only (`reason=queue_full`).
 - On shutdown each sink gets `ShutdownFlushTimeout` to write what is pending, then is abandoned. A sink that ignores its token and blocks forever cannot be killed; it fills its queue, then drops. Watch the drop counters.
-- Requires `Komento.Sinks` and `EnableExposureStream`. The host fails at startup with a clear message if the stream is not enabled. The README's "Exposures and metrics" section has a worked example.
+- Requires `Komento.Sinks` and `EnableExposureStream`. The host fails at startup with a clear message if the stream is not enabled. [Sinks](sinks.md) has a worked example.
 
 ---
 
