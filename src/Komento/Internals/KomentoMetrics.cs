@@ -11,4 +11,7 @@ internal static class KomentoMetrics
 
     public static readonly Counter<long> ExposuresDropped = Meter.CreateCounter<long>(
         "komento.exposures.dropped", description: "Exposures dropped because the exposure stream was full.");
+
+    public static readonly Counter<long> TrackDropped = Meter.CreateCounter<long>(
+        "komento.track.dropped", description: "Conversion events dropped, tagged by reason.");
 }

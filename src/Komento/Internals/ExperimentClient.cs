@@ -5,7 +5,8 @@ using System.Threading.Channels;
 
 namespace Komento.Internals;
 
-internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExposureStream
+internal sealed class ExperimentClient
+    : IExperimentClient, IConfigUpdater, IExposureStream, IExperimentTracker, ITrackStream
 {
     private FrozenDictionary<string, CompiledExperiment> _experiments =
         FrozenDictionary<string, CompiledExperiment>.Empty;
@@ -16,10 +17,16 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
     private readonly bool                       _emitActivityEvents;
     private readonly bool                       _includeSubjectIdInActivityEvents;
     private readonly Channel<ExposureEvent>?    _exposureChannel;
+    private readonly Channel<TrackEvent>?       _trackChannel;
+    private readonly bool                       _includeContextInTrackEvents;
 
     public ChannelReader<ExposureEvent> Reader => _exposureChannel?.Reader
         ?? throw new InvalidOperationException(
             $"Exposure stream is disabled. Set {nameof(KomentoOptions)}.{nameof(KomentoOptions.EnableExposureStream)} = true.");
+
+    ChannelReader<TrackEvent> ITrackStream.Reader => _trackChannel?.Reader
+        ?? throw new InvalidOperationException(
+            $"Track stream is disabled. Set {nameof(KomentoOptions)}.{nameof(KomentoOptions.EnableTrackStream)} = true.");
 
     public ExperimentClient(
         KomentoOptions    options,
@@ -31,6 +38,15 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         _timeProvider                     = timeProvider ?? TimeProvider.System;
         _emitActivityEvents               = options.EmitActivityEvents;
         _includeSubjectIdInActivityEvents = options.IncludeSubjectIdInActivityEvents;
+        _includeContextInTrackEvents      = options.IncludeContextInTrackEvents;
+        if (options.EnableTrackStream)
+            _trackChannel = Channel.CreateBounded<TrackEvent>(new BoundedChannelOptions(options.TrackChannelCapacity)
+            {
+                // Wait: TryWrite returns false when the channel is full, so drops can be counted.
+                FullMode     = BoundedChannelFullMode.Wait,
+                SingleWriter = false,
+                SingleReader = false
+            });
         if (options.EnableExposureStream)
             _exposureChannel = Channel.CreateBounded<ExposureEvent>(new BoundedChannelOptions(options.ExposureChannelCapacity)
             {
@@ -302,6 +318,50 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         compiled.Remove(experimentId);
         Volatile.Write(ref _experiments, compiled.ToFrozenDictionary(StringComparer.Ordinal));
         return ValueTask.CompletedTask;
+    }
+
+    // ── IExperimentTracker ────────────────────────────────────────────────────
+
+    public void Track(
+        string eventName, string subjectId, double? value = null,
+        IReadOnlyDictionary<string, object?>? properties = null)
+        => Track(eventName, subjectId, in EvaluationContext.Empty, value, properties);
+
+    public void Track(
+        string eventName, string subjectId, in EvaluationContext ctx,
+        double? value = null, IReadOnlyDictionary<string, object?>? properties = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(eventName);
+        ArgumentException.ThrowIfNullOrEmpty(subjectId);
+        if (_trackChannel is null) return;
+
+        var evt = new TrackEvent
+        {
+            EventName  = eventName,
+            SubjectId  = subjectId,
+            Value      = value,
+            Properties = SnapshotProperties(properties),
+            Context    = _includeContextInTrackEvents ? MergeContext(in ctx) : null,
+            Timestamp  = _timeProvider.GetUtcNow()
+        };
+
+        if (!_trackChannel.Writer.TryWrite(evt))
+            KomentoMetrics.TrackDropped.Add(1, new KeyValuePair<string, object?>("reason", "queue_full"));
+    }
+
+    private static IReadOnlyDictionary<string, object?>? SnapshotProperties(
+        IReadOnlyDictionary<string, object?>? properties)
+        => properties is null || properties.Count == 0
+            ? null
+            : properties.ToFrozenDictionary(StringComparer.Ordinal);
+
+    // Static context first, then the per-call context on top, so per-call attributes win.
+    private IReadOnlyDictionary<string, object>? MergeContext(in EvaluationContext ctx)
+    {
+        var merged = new Dictionary<string, object>(StringComparer.Ordinal);
+        _staticContext.CopyTo(merged);
+        ctx.CopyTo(merged);
+        return merged.Count == 0 ? null : merged.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
