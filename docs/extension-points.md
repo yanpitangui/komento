@@ -1,6 +1,6 @@
 # Extension Points
 
-Komento is designed around eleven public interfaces. Each covers one seam: six in the evaluation pipeline, two for getting exposure data out of it, and three for recording conversions. This document explains why each exists and what problem it is meant to solve — intended as a reference for deciding which implementations to build.
+Komento is designed around twelve public interfaces. Each covers one seam: six in the evaluation pipeline, two for getting exposure data out of it, three for recording conversions, and one for observing configuration changes. This document explains why each exists and what problem it is meant to solve — intended as a reference for deciding which implementations to build.
 
 ---
 
@@ -124,6 +124,7 @@ public interface IEvaluationContextEnricher
 - Async enrichers (calling Redis for a profile, calling a feature store) are supported but add latency to every gated request. Cache aggressively.
 - The static context set in `KomentoOptions.StaticContext` (region, service name, environment) is applied by the engine to every evaluation, at the lowest precedence. Enricher attributes take precedence over a static attribute of the same name.
 - Think of enrichers as the assembly point for "what do we know about this request that experiments might filter on?"
+- `KomentoRequestContext.ResolveAsync(httpContext, ct)` runs the registered subject providers and enrichers for a request and returns the subject ID and the enriched context. The gating filters use it, and endpoints that evaluate by hand can use it instead of repeating that logic.
 
 ---
 
@@ -147,7 +148,7 @@ public interface IExperimentClient
 
 **What it solves:** Defines the contract for flag evaluation independently of the engine implementation. Application code, ASP.NET Core filters, and OpenFeature adapters all depend on this interface — never on the concrete `ExperimentClient`.
 
-**`GetVariantAsync` is canonical.** The typed helpers (`GetBoolAsync`, etc.) call it internally and unwrap `VariantResult.Value`. Use `GetVariantAsync` when you need the full result (eligibility, outsider status, variant name). Use the typed helpers for simple on/off flags with a typed payload.
+**`GetVariantAsync` is canonical.** The typed helpers (`GetBoolAsync`, etc.) call it internally and unwrap `VariantResult.Value`. Use `GetVariantAsync` when you need the full result (eligibility, outsider status, variant name, how the variant was assigned in `Source`: `Hash`, `SubjectOverride` or `SegmentOverride`, and the experiment's `SubjectType`). Use the typed helpers for simple on/off flags with a typed payload.
 
 **`ExperimentExists`:** A fast existence check for adapters that need to distinguish "flag not found" from "subject ineligible". `Komento.OpenFeature` uses this to emit OpenFeature's `FLAG_NOT_FOUND` only for genuinely missing experiments.
 
@@ -283,6 +284,28 @@ public interface ITrackSink
 **Why it exists and what it solves:** What `IExposureSink` does for exposures, for conversions: batching, per-sink isolation, timeouts, shutdown flush and drop counting, with only the destination-specific write left to you.
 
 **Contract and production notes:** The contract matches `IExposureSink`: calls are sequential per sink, throwing drops the batch, retries belong inside the sink, and the sink is a singleton resolved from the root provider. Register with `AddTrackSink<T>()`, a delegate overload, or `AddLoggingTrackSink()`; it needs `EnableTrackStream`. Options are `TrackSinkOptions` (the same properties as `ExposureSinkOptions`, both derived from `SinkOptions`). Drops are counted in `komento.track.sink.dropped`.
+
+---
+
+## `IConfigChanges`
+
+```csharp
+public interface IConfigChanges
+{
+    event Action<IReadOnlyCollection<string>> Changed;
+}
+```
+
+**Why it exists:** Code that reacts to experiment changes (a cache of derived data, an OpenFeature client waiting for `ProviderConfigurationChanged`) needs to know *when* configs change and *which* ones, without polling the engine.
+
+**What it solves:** The engine compares each config it receives with the one it holds, structurally (id, subject type, variants, filters, overrides), and raises `Changed` with the ids that were added, removed or really changed. `IConfigUpdater.UpdateAsync` and `RemoveAsync` are the only sources of change, and the same instance implements both.
+
+**Contract and production notes:**
+- `Changed` is raised once per update call, with every id that changed in it. A full reload that changes three experiments raises it once with three ids.
+- An update that changes nothing raises nothing, so a polling service that reloads the same configs every interval is silent.
+- When two parts cannot be compared reliably (a variant value type without value equality, say), they count as changed, so a real change is never missed.
+- Handlers run synchronously on the thread that applied the update, so keep them quick. A handler that throws is ignored and does not affect the update or other handlers.
+- `KomentoFeatureProvider` subscribes to turn the ids into OpenFeature's `ProviderConfigurationChanged` event. See [OpenFeature](openfeature.md).
 
 ---
 

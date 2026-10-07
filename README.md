@@ -24,6 +24,7 @@ if (result == "treatment")
 | Komento | Core engine, all interfaces, DI registration | [![NuGet](https://img.shields.io/nuget/v/Komento.svg)](https://www.nuget.org/packages/Komento) |
 | Komento.AspNetCore | ASP.NET Core integration (filters, subject provider, enrichers) | [![NuGet](https://img.shields.io/nuget/v/Komento.AspNetCore.svg)](https://www.nuget.org/packages/Komento.AspNetCore) |
 | Komento.OpenFeature | OpenFeature provider adapter | [![NuGet](https://img.shields.io/nuget/v/Komento.OpenFeature.svg)](https://www.nuget.org/packages/Komento.OpenFeature) |
+| Komento.OpenFeature.AspNetCore | Per-request OpenFeature context built from Komento's ASP.NET Core enrichers | [![NuGet](https://img.shields.io/nuget/v/Komento.OpenFeature.AspNetCore.svg)](https://www.nuget.org/packages/Komento.OpenFeature.AspNetCore) |
 | Komento.Sinks | Batched, isolated sinks for exposures and conversions (R3) | [![NuGet](https://img.shields.io/nuget/v/Komento.Sinks.svg)](https://www.nuget.org/packages/Komento.Sinks) |
 ---
 
@@ -82,17 +83,17 @@ string theme  = await experiments.GetStringAsync("ui-theme", userId, ctx, defaul
 
 ### 4. Use Komento through OpenFeature
 
-If your application already uses the OpenFeature .NET SDK, install `Komento.OpenFeature` and register `KomentoFeatureProvider` with the OpenFeature API.
+If your application already uses the OpenFeature .NET SDK, install `Komento.OpenFeature` and register `KomentoFeatureProvider` with the OpenFeature API. Registering it loads the experiment configs from your source.
 
 ```csharp
 using Komento.OpenFeature;
 using OpenFeature;
 using OpenFeature.Model;
 
-await app.Services.InitializeKomentoAsync();
+services.AddKomento().AddSource<MySource>();
+services.AddSingleton<KomentoFeatureProvider>();
 
-var experimentClient = app.Services.GetRequiredService<IExperimentClient>();
-Api.Instance.SetProvider(new KomentoFeatureProvider(experimentClient));
+await Api.Instance.SetProviderAsync(app.Services.GetRequiredService<KomentoFeatureProvider>());
 
 var client = Api.Instance.GetClient();
 var ctx = EvaluationContext.Builder()
@@ -104,16 +105,7 @@ bool enabled = await client.GetBooleanValueAsync("dark-mode", false, ctx);
 string theme = await client.GetStringValueAsync("ui-theme", "default", ctx);
 ```
 
-`KomentoFeatureProvider` maps OpenFeature requests onto `IExperimentClient`:
-
-| OpenFeature result | Komento behavior |
-|---|---|
-| `TARGETING_KEY_MISSING` | OpenFeature context has no `targetingKey` |
-| `FLAG_NOT_FOUND` | `IExperimentClient.ExperimentExists(flagKey)` is false |
-| `DEFAULT` | Subject is ineligible or an outsider |
-| `TARGETING_MATCH` | Subject was assigned a variant and the value type matched |
-| `PARSE_ERROR` | Variant value existed but could not be converted to the requested OpenFeature type |
-
+Provider lifecycle, change events, resolution details, a per-request context for ASP.NET Core, and telemetry are covered in [OpenFeature](docs/openfeature.md).
 
 ### 5. Record exposures and conversions (optional)
 
