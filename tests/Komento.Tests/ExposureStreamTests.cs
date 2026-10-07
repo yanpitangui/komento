@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using TUnit.Core;
 
 namespace Komento.Tests;
@@ -14,9 +15,11 @@ public class ExposureStreamTests
         Variants    = [new VariantConfig { Name = "only", Allocation = 1.0 }]
     };
 
-    private static ServiceProvider Build(Action<KomentoOptions>? configure = null)
+    private static ServiceProvider Build(Action<KomentoOptions>? configure = null, TimeProvider? time = null)
     {
         var services = new ServiceCollection();
+        if (time is not null)
+            services.AddSingleton(time);
         services.AddKomento(configure);
         return services.BuildServiceProvider();
     }
@@ -34,6 +37,21 @@ public class ExposureStreamTests
         stream.Reader.TryRead(out var exposure).Should().BeTrue();
         exposure.FlagKey.Should().Be("stream-exp");
         exposure.SubjectId.Should().Be("user-1");
+    }
+
+    [Test]
+    public async Task Exposure_timestamp_comes_from_the_registered_time_provider()
+    {
+        var now  = new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero);
+        var time = new FakeTimeProvider(now);
+        using var provider = Build(o => o.EnableExposureStream = true, time);
+        await provider.GetRequiredService<IConfigUpdater>().UpdateAsync(OneVariant("clock-exp"));
+
+        await provider.GetRequiredService<IExperimentClient>()
+            .GetVariantAsync("clock-exp", "user-1", EvaluationContext.Empty);
+
+        provider.GetRequiredService<IExposureStream>().Reader.TryRead(out var exposure).Should().BeTrue();
+        exposure.Timestamp.Should().Be(now);
     }
 
     [Test]

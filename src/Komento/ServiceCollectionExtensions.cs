@@ -19,7 +19,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ExperimentClient>(sp =>
             new ExperimentClient(
                 sp.GetRequiredService<KomentoOptions>(),
-                sp.GetService<ISegmentProvider>()));
+                sp.GetService<ISegmentProvider>(),
+                sp.GetService<TimeProvider>()));
 
         services.AddSingleton<IExperimentClient>(sp => sp.GetRequiredService<ExperimentClient>());
         services.AddSingleton<IConfigUpdater>(sp => sp.GetRequiredService<ExperimentClient>());

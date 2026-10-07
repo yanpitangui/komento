@@ -10,6 +10,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         FrozenDictionary<string, CompiledExperiment>.Empty;
 
     private readonly ISegmentProvider?          _segmentProvider;
+    private readonly TimeProvider               _timeProvider;
     private readonly bool                       _emitActivityEvents;
     private readonly bool                       _includeSubjectIdInActivityEvents;
     private readonly Channel<ExposureEvent>?    _exposureChannel;
@@ -18,9 +19,13 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
         ?? throw new InvalidOperationException(
             $"Exposure stream is disabled. Set {nameof(KomentoOptions)}.{nameof(KomentoOptions.EnableExposureStream)} = true.");
 
-    public ExperimentClient(KomentoOptions options, ISegmentProvider? segmentProvider = null)
+    public ExperimentClient(
+        KomentoOptions    options,
+        ISegmentProvider? segmentProvider = null,
+        TimeProvider?     timeProvider    = null)
     {
         _segmentProvider                  = segmentProvider;
+        _timeProvider                     = timeProvider ?? TimeProvider.System;
         _emitActivityEvents               = options.EmitActivityEvents;
         _includeSubjectIdInActivityEvents = options.IncludeSubjectIdInActivityEvents;
         if (options.EnableExposureStream)
@@ -368,7 +373,7 @@ internal sealed class ExperimentClient : IExperimentClient, IConfigUpdater, IExp
             VariantName = result.VariantName,
             IsEligible  = result.IsEligible,
             IsOutsider  = result.IsOutsider,
-            Timestamp   = DateTimeOffset.UtcNow
+            Timestamp   = _timeProvider.GetUtcNow()
         });
 
         if (!written)
