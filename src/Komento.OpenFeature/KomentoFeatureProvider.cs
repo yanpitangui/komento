@@ -7,9 +7,55 @@ using KomentoCtx = Komento.EvaluationContext;
 
 namespace Komento.OpenFeature;
 
-public sealed class KomentoFeatureProvider(IExperimentClient client, IExperimentTracker? tracker = null) : FeatureProvider
+public sealed class KomentoFeatureProvider(
+    IExperimentClient   client,
+    IExperimentTracker? tracker = null,
+    IExperimentSource?  source  = null,
+    IConfigUpdater?     updater = null,
+    IConfigChanges?     changes = null) : FeatureProvider
 {
     public override Metadata GetMetadata() => new("Komento");
+
+    /// <summary>
+    /// Loads the configs from the registered <see cref="IExperimentSource"/> (the same load as
+    /// <c>InitializeKomentoAsync</c>), so registering the provider is enough to start evaluating. When no source
+    /// or updater is registered the provider is ready immediately. A failing source makes the SDK report an
+    /// error status.
+    /// </summary>
+    public override async Task InitializeAsync(OFContext context, CancellationToken cancellationToken = default)
+    {
+        if (source is not null && updater is not null)
+        {
+            var all     = new HashSet<string>();
+            var configs = await source.LoadAsync(all, cancellationToken).ConfigureAwait(false);
+            await updater.UpdateAsync(configs, all, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Subscribe after the initial load, so loading the configs does not announce itself as a change.
+        if (changes is not null && _onChanged is null)
+        {
+            _onChanged = ids => EventChannel.Writer.TryWrite(new ProviderEventPayload
+            {
+                Type         = ProviderEventTypes.ProviderConfigurationChanged,
+                ProviderName = "Komento",
+                FlagsChanged = [.. ids]
+            });
+            changes.Changed += _onChanged;
+        }
+    }
+
+    /// <summary>Stops announcing config changes.</summary>
+    public override Task ShutdownAsync(CancellationToken cancellationToken = default)
+    {
+        if (changes is not null && _onChanged is not null)
+        {
+            changes.Changed -= _onChanged;
+            _onChanged = null;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Action<IReadOnlyCollection<string>>? _onChanged;
 
     /// <summary>
     /// Forwards OpenFeature tracking calls to <see cref="IExperimentTracker"/>. Does nothing when no tracker is
