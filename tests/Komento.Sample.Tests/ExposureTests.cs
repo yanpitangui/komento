@@ -52,11 +52,13 @@ public sealed class ExposureTests(AppHostFixture fixture)
         for (var i = 0; i < 51; i++)
             await ViewProductAsync(token);
 
-        await WaitForExposuresAsync(userId, expected: 100, TimeSpan.FromSeconds(30));
-        await Task.Delay(TimeSpan.FromSeconds(3)); // let the remaining exposures flush
+        // The sink writes in order, so once a later marker subject's exposures are visible,
+        // all of the subject's exposures above have been written too.
+        var markerId = $"exposure-marker-{Guid.NewGuid():N}";
+        await ViewProductAsync(await GetTokenAsync(markerId));
+        await WaitForExposuresAsync(markerId, expected: 2, TimeSpan.FromSeconds(30));
 
-        var response  = await fixture.AdminClient.GetAsync($"/exposures?subjectId={Uri.EscapeDataString(userId)}");
-        var exposures = await response.Content.ReadFromJsonAsync<ExposureResponse[]>();
+        var exposures = await GetExposuresAsync(userId);
 
         exposures.Should().HaveCount(100);
     }
@@ -70,30 +72,40 @@ public sealed class ExposureTests(AppHostFixture fixture)
 
     private async Task<string> GetTokenAsync(string userId)
     {
-        var response = await fixture.EcommerceClient.GetAsync($"/token?userId={userId}");
+        var response = await fixture.EcommerceClient.GetAsync($"/token?userId={Uri.EscapeDataString(userId)}");
         response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<TokenBody>();
+        var body = await response.Content.ReadFromJsonAsync<TokenResponse>();
         return body!.Token;
     }
 
+    private async Task<IReadOnlyList<ExposureResponse>> GetExposuresAsync(string subjectId, CancellationToken ct = default)
+    {
+        var response = await fixture.AdminClient.GetAsync($"/exposures?subjectId={Uri.EscapeDataString(subjectId)}", ct);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<ExposureResponse[]>(ct))!;
+    }
+
+    /// <summary>
+    /// The APIs run as separate processes, so exposures arrive after real I/O (the sink's batch flush)
+    /// and there is no clock to fake; poll until enough have arrived or the timeout elapses.
+    /// </summary>
     private async Task<IReadOnlyList<ExposureResponse>> WaitForExposuresAsync(
         string subjectId, int expected, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + timeout;
+        using var cts   = new CancellationTokenSource(timeout);
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
         IReadOnlyList<ExposureResponse> exposures = [];
-        while (DateTime.UtcNow < deadline)
+        try
         {
-            var response = await fixture.AdminClient.GetAsync($"/exposures?subjectId={Uri.EscapeDataString(subjectId)}");
-            if (response.IsSuccessStatusCode)
+            do
             {
-                exposures = (await response.Content.ReadFromJsonAsync<ExposureResponse[]>())!;
+                exposures = await GetExposuresAsync(subjectId, cts.Token);
                 if (exposures.Count >= expected) return exposures;
             }
-            await Task.Delay(500);
+            while (await timer.WaitForNextTickAsync(cts.Token));
         }
+        catch (OperationCanceledException) { }
+
         return exposures;
     }
-
-    // The token endpoint's response type is typed in the follow-up PR that fixes the other endpoints.
-    private sealed record TokenBody(string Token);
 }

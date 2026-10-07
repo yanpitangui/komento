@@ -76,24 +76,32 @@ Response shape:
 
 ### 3. Create an experiment (Admin API)
 
+The body is an `ExperimentConfig`. The Admin API rejects a body that is not one (or whose `id`
+differs from the one in the URL) with a `400`:
+
 ```bash
-# Enable the premium-product-page experiment (100 % treatment)
+# Define the premium-product-page experiment: everyone on the premium plan gets the "on" variant
 curl -X PUT http://localhost:<admin-port>/experiments/premium-product-page \
      -H "Content-Type: application/json" \
      -d '{
-       "bucketCount": 1000,
+       "id": "premium-product-page",
+       "subjectType": "user",
        "variants": [
-         { "name": "control",   "bucketRanges": [] },
-         { "name": "treatment", "bucketRanges": [{ "start": 1, "end": 1000 }] }
+         { "name": "on", "allocation": 1.0, "value": true }
        ],
-       "filters": [],
+       "globalFilters": [
+         { "type": "trait-equals", "key": "plan", "value": "premium" }
+       ],
        "overrides": []
      }'
+
+# Read it back
+curl http://localhost:<admin-port>/experiments/premium-product-page
 ```
 
 The NATS watcher in EcommerceApi picks up the change within milliseconds. The next
-`/products/{id}` call will return `"premiumPage": true` for users who hash into the
-treatment bucket.
+`/products/{id}` call will return `"premiumPage": true` for users whose token has
+`plan=premium`.
 
 ### 4. Add a loyalty member
 

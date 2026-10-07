@@ -30,33 +30,40 @@ var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
 // ── Experiment endpoints ───────────────────────────────────────────────────
 
-app.MapGet("/experiments/{id}", async (string id, INatsConnection nats, CancellationToken ct) =>
+app.MapGet("/experiments/{id}", async Task<Results<Ok<ExperimentConfig>, NotFound>> (
+    string id, INatsConnection nats, CancellationToken ct) =>
 {
     var kv    = nats.CreateKeyValueStoreContext();
     var store = await kv.CreateOrUpdateStoreAsync(new NatsKVConfig("experiments"), ct);
     try
     {
-        var entry = await store.GetEntryAsync<string>(id, cancellationToken: ct);
-        return Results.Text(entry.Value ?? "", "application/json");
+        var entry  = await store.GetEntryAsync<string>(id, cancellationToken: ct);
+        var config = entry.Value is null
+            ? null
+            : JsonSerializer.Deserialize<ExperimentConfig>(entry.Value, jsonOptions);
+        return config is null ? TypedResults.NotFound() : TypedResults.Ok(config);
     }
     catch (NatsKVKeyNotFoundException)
     {
-        return Results.NotFound();
+        return TypedResults.NotFound();
     }
 });
 
-app.MapPut("/experiments/{id}", async (string id, HttpRequest request, INatsConnection nats, CancellationToken ct) =>
+// The body is bound to ExperimentConfig, so a malformed or incomplete body is rejected with a 400
+// before anything is stored.
+app.MapPut("/experiments/{id}", async Task<Results<NoContent, ValidationProblem>> (
+    string id, ExperimentConfig config, INatsConnection nats, CancellationToken ct) =>
 {
-    using var reader = new StreamReader(request.Body);
-    var body = await reader.ReadToEndAsync(ct);
-
-    // Validate it's a parseable ExperimentConfig before storing
-    JsonSerializer.Deserialize<ExperimentConfig>(body, jsonOptions);
+    if (!string.Equals(config.Id, id, StringComparison.Ordinal))
+        return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+        {
+            [nameof(config.Id)] = [$"The body id '{config.Id}' does not match the route id '{id}'."]
+        });
 
     var kv    = nats.CreateKeyValueStoreContext();
     var store = await kv.CreateOrUpdateStoreAsync(new NatsKVConfig("experiments"), ct);
-    await store.PutAsync(id, body, cancellationToken: ct);
-    return Results.NoContent();
+    await store.PutAsync(id, JsonSerializer.Serialize(config, jsonOptions), cancellationToken: ct);
+    return TypedResults.NoContent();
 });
 
 // ── Loyalty endpoints ──────────────────────────────────────────────────────
@@ -66,7 +73,7 @@ app.MapPut("/loyalty/{userId}", async (string userId, INatsConnection nats, Canc
     var kv    = nats.CreateKeyValueStoreContext();
     var store = await kv.CreateOrUpdateStoreAsync(new NatsKVConfig("loyalty"), ct);
     await store.PutAsync(userId, "true", cancellationToken: ct);
-    return Results.NoContent();
+    return TypedResults.NoContent();
 });
 
 app.MapDelete("/loyalty/{userId}", async (string userId, INatsConnection nats, CancellationToken ct) =>
@@ -74,7 +81,7 @@ app.MapDelete("/loyalty/{userId}", async (string userId, INatsConnection nats, C
     var kv    = nats.CreateKeyValueStoreContext();
     var store = await kv.CreateOrUpdateStoreAsync(new NatsKVConfig("loyalty"), ct);
     await store.DeleteAsync(userId, cancellationToken: ct);
-    return Results.NoContent();
+    return TypedResults.NoContent();
 });
 
 // ── VIP endpoints ─────────────────────────────────────────────────────────
@@ -89,7 +96,7 @@ app.MapGet("/vip", async (NpgsqlDataSource db, CancellationToken ct) =>
     while (await reader.ReadAsync(ct))
         ids.Add(reader.GetString(0));
 
-    return Results.Ok(ids);
+    return TypedResults.Ok(ids);
 });
 
 app.MapPost("/vip/{userId}", async (string userId, NpgsqlDataSource db, CancellationToken ct) =>
@@ -99,7 +106,7 @@ app.MapPost("/vip/{userId}", async (string userId, NpgsqlDataSource db, Cancella
         "INSERT INTO vip_users (user_id) VALUES ($1) ON CONFLICT DO NOTHING", conn);
     cmd.Parameters.AddWithValue(userId);
     await cmd.ExecuteNonQueryAsync(ct);
-    return Results.Created($"/vip/{userId}", null);
+    return TypedResults.NoContent();
 });
 
 // ── Exposure endpoints ────────────────────────────────────────────────────
