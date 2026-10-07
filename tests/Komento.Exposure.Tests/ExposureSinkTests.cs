@@ -79,12 +79,13 @@ public class ExposureSinkTests
 
         await EvaluateAsync(provider, "flush-exp", 2);
 
-        // The pipeline reads asynchronously, so keep advancing until the flush lands.
-        var deadline = DateTime.UtcNow + Timeout;
-        while (!received.Task.IsCompleted && DateTime.UtcNow < deadline)
+        // The pipeline reads asynchronously, so keep advancing the fake clock until the flush lands.
+        // The cancellation token bounds the wait and fails the test (instead of hanging) if it never does.
+        using var timeout = new CancellationTokenSource(Timeout);
+        while (!received.Task.IsCompleted)
         {
             time.Advance(TimeSpan.FromSeconds(5));
-            await Task.Delay(10);
+            await Task.Delay(10, timeout.Token);
         }
 
         (await received.Task.WaitAsync(Timeout)).Should().HaveCount(2);
