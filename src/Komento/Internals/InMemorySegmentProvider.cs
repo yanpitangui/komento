@@ -1,9 +1,13 @@
 using System.Collections.Frozen;
 using Komento;
 
-namespace Komento.Internals;
+namespace Komento;
 
-internal sealed class InMemorySegmentProvider : ISegmentProvider
+/// <summary>
+/// Segment membership from lists held in memory. Each list is stored as a <see cref="BinSet"/>,
+/// so a lookup is a binary search with no allocation.
+/// </summary>
+public sealed class InMemorySegmentProvider : ISegmentProvider
 {
     private readonly FrozenDictionary<string, ReadOnlyMemory<byte>> _segments;
 
