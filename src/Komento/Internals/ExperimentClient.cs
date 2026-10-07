@@ -468,7 +468,8 @@ internal sealed class ExperimentClient
             VariantName = result.VariantName,
             IsEligible  = result.IsEligible,
             IsOutsider  = result.IsOutsider,
-            Timestamp   = _timeProvider.GetUtcNow()
+            Timestamp   = _timeProvider.GetUtcNow(),
+            ConfigRevision = exp.Revision
         });
 
         if (!written)
