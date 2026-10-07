@@ -24,9 +24,11 @@ builder.AddNatsClient("nats");
 builder.AddNpgsqlDataSource("komento-db");
 
 // Komento core
-builder.Services.AddKomento()
+builder.Services.AddKomento(o => o.EnableExposureStream = true)
 .AddSource<NatsExperimentSource>()
-.AddSegmentProvider<AppSegmentProvider>();
+.AddSegmentProvider<AppSegmentProvider>()
+.AddExposureSink<PostgresExposureSink>(o => o.FlushInterval = TimeSpan.FromSeconds(1))
+.AddLoggingExposureSink();
 
 // Komento.AspNetCore integration
 builder.Services.AddKomentoAspNetCore()

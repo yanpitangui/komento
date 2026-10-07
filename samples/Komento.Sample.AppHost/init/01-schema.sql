@@ -10,3 +10,16 @@ WHERE NOT EXISTS (
 CREATE TABLE IF NOT EXISTS vip_users (
     user_id TEXT PRIMARY KEY
 );
+
+CREATE TABLE IF NOT EXISTS exposures (
+    id           BIGSERIAL PRIMARY KEY,
+    experiment   TEXT        NOT NULL,
+    subject_id   TEXT        NOT NULL,
+    subject_type TEXT        NOT NULL,
+    variant      TEXT        NOT NULL,
+    is_eligible  BOOLEAN     NOT NULL,
+    is_outsider  BOOLEAN     NOT NULL,
+    exposed_at   TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS exposures_subject_idx ON exposures (subject_id);

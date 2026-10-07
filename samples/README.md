@@ -12,6 +12,7 @@ A runnable end-to-end demo that exercises every Komento public extension point:
 | `BinSet` | Compact in-memory VIP user set loaded from PostgreSQL |
 | `IExperimentClient` | Direct usage in `/products/{id}` |
 | `KomentoFeatureProvider` | OpenFeature bridge in `/recommendations` |
+| `IExposureSink` | `PostgresExposureSink` batches every exposure into the `exposures` table |
 | Aspire orchestration | AppHost wires NATS + PostgreSQL + both APIs |
 
 ## Projects
@@ -127,6 +128,33 @@ curl -H "Authorization: Bearer $TOKEN" \
 The `recommendation-algorithm` experiment is evaluated through the OpenFeature
 `KomentoFeatureProvider` bridge, returning `collaborative` or `content-based`
 depending on the experiment assignment.
+
+### 7. See the recorded exposures
+
+Every evaluation above was recorded as an exposure. `PostgresExposureSink` batches them
+(flushing every second in this sample) into the `exposures` table, and the Admin API reads
+them back:
+
+```bash
+# after viewing a product with a token for the user "nobody"
+curl "http://localhost:<admin-port>/exposures?subjectId=nobody"
+```
+
+`/products/{id}` evaluates two experiments, so you get two rows. "nobody" is neither a loyalty
+member nor VIP and is on the free plan, so both are ineligible:
+
+```json
+[
+  { "experiment": "premium-product-page", "subjectId": "nobody", "subjectType": "user",
+    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "..." },
+  { "experiment": "price-display", "subjectId": "nobody", "subjectType": "user",
+    "variant": "control", "isEligible": false, "isOutsider": false, "exposedAt": "..." }
+]
+```
+
+Outsiders and ineligible subjects are recorded too (with variant `control`); filter them out
+when analyzing. The same exposures are also written to the EcommerceApi log by
+`AddLoggingExposureSink()`.
 
 ## Seeded data
 

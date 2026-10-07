@@ -100,4 +100,31 @@ app.MapPost("/vip/{userId}", async (string userId, NpgsqlDataSource db, Cancella
     return Results.Created($"/vip/{userId}", null);
 });
 
+// ── Exposure endpoints ────────────────────────────────────────────────────
+
+app.MapGet("/exposures", async (string subjectId, NpgsqlDataSource db, CancellationToken ct) =>
+{
+    await using var conn = await db.OpenConnectionAsync(ct);
+    await using var cmd  = new NpgsqlCommand(
+        "SELECT experiment, subject_id, subject_type, variant, is_eligible, is_outsider, exposed_at " +
+        "FROM exposures WHERE subject_id = $1 ORDER BY exposed_at", conn);
+    cmd.Parameters.AddWithValue(subjectId);
+    await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+    var rows = new List<object>();
+    while (await reader.ReadAsync(ct))
+        rows.Add(new
+        {
+            experiment  = reader.GetString(0),
+            subjectId   = reader.GetString(1),
+            subjectType = reader.GetString(2),
+            variant     = reader.GetString(3),
+            isEligible  = reader.GetBoolean(4),
+            isOutsider  = reader.GetBoolean(5),
+            exposedAt   = reader.GetFieldValue<DateTimeOffset>(6)
+        });
+
+    return Results.Ok(rows);
+});
+
 app.Run();
